@@ -34,11 +34,15 @@ func main() {
 	fmt.Printf("Container status: %s\n", status)
 
 	message := "List the files in the current directory"
-	output, err := manager.ExecuteClaude(sessionID, message)
+	reader, err := manager.Prompt(sessionID, message)
 	if err != nil {
 		log.Fatalf("Failed to execute claude: %v", err)
 	}
-	fmt.Printf("Claude output:\n%s\n", output)
+	defer reader.Close()
+	
+	output := make([]byte, 1024*64)
+	n, _ := reader.Read(output)
+	fmt.Printf("Claude output:\n%s\n", string(output[:n]))
 
 	logs, err := manager.GetContainerLogs(sessionID, "50")
 	if err != nil {

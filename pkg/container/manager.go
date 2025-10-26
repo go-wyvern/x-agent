@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -151,13 +150,13 @@ func (m *Manager) CheckContainerStatus(sessionID string) (ContainerStatus, error
 	return ContainerStopped, nil
 }
 
-func (m *Manager) ExecuteClaude(sessionID, message string) (string, error) {
+func (m *Manager) Prompt(sessionID, message string) (io.ReadCloser, error) {
 	m.mutex.RLock()
 	c := m.containers[sessionID]
 	m.mutex.RUnlock()
 
 	if c == nil {
-		return "", fmt.Errorf("container not found for session %s", sessionID)
+		return nil, fmt.Errorf("container not found for session %s", sessionID)
 	}
 
 	mcpConfigPath := "/etc/claude/mcp-config.json"
@@ -169,7 +168,7 @@ func (m *Manager) ExecuteClaude(sessionID, message string) (string, error) {
 		"-p", message,
 	}
 
-	execConfig := types.ExecConfig{
+	execConfig := container.ExecOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -182,42 +181,21 @@ func (m *Manager) ExecuteClaude(sessionID, message string) (string, error) {
 		execConfig,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to create exec: %w", err)
+		return nil, fmt.Errorf("failed to create exec: %w", err)
 	}
 
 	resp, err := m.client.ContainerExecAttach(
 		context.Background(),
 		execID.ID,
-		types.ExecStartCheck{},
+		container.ExecStartOptions{},
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to attach exec: %w", err)
-	}
-	defer resp.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	defer cancel()
-
-	output := &bytes.Buffer{}
-	done := make(chan error, 1)
-
-	go func() {
-		_, err := stdcopy.StdCopy(output, output, resp.Reader)
-		done <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return "", fmt.Errorf("command execution timeout")
-	case err := <-done:
-		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("failed to read output: %w", err)
-		}
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
 	}
 
 	c.LastUsedAt = time.Now()
 	log.Printf("Executed claude-code in container %s for session %s", c.ContainerName, sessionID)
-	return output.String(), nil
+	return resp.Conn, nil
 }
 
 func (m *Manager) StartCleanupScheduler(interval time.Duration, idleTimeout time.Duration) {
