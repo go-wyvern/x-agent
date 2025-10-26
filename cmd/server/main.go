@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-wyvern/x-agent/internal/api"
 	"github.com/go-wyvern/x-agent/internal/session"
+	"github.com/go-wyvern/x-agent/pkg/container"
 	"github.com/go-wyvern/x-agent/pkg/storage"
 )
 
@@ -17,7 +18,15 @@ func main() {
 
 	sessionManager.StartCleanupScheduler(1 * time.Hour)
 
-	chatHandler := api.NewChatHandler(sessionManager)
+	containerManager, err := container.NewManager("ghcr.io/anthropics/claude-code:latest")
+	if err != nil {
+		log.Fatalf("Failed to create container manager: %v", err)
+	}
+	defer containerManager.Close()
+
+	containerManager.StartCleanupScheduler(1*time.Hour, 24*time.Hour)
+
+	chatHandler := api.NewChatHandler(sessionManager, containerManager)
 
 	r := gin.Default()
 

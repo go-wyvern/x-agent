@@ -1,20 +1,24 @@
 package api
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-wyvern/x-agent/internal/models"
 	"github.com/go-wyvern/x-agent/internal/session"
+	"github.com/go-wyvern/x-agent/pkg/container"
 )
 
 type ChatHandler struct {
-	sessionManager *session.SessionManager
+	sessionManager   *session.SessionManager
+	containerManager *container.Manager
 }
 
-func NewChatHandler(sm *session.SessionManager) *ChatHandler {
+func NewChatHandler(sm *session.SessionManager, cm *container.Manager) *ChatHandler {
 	return &ChatHandler{
-		sessionManager: sm,
+		sessionManager:   sm,
+		containerManager: cm,
 	}
 }
 
@@ -71,6 +75,12 @@ func (h *ChatHandler) HandleChatCompletion(c *gin.Context) {
 			return
 		}
 		c.Header("X-Session-ID", sess.ID)
+
+		_, err = h.containerManager.CreateContainer(sess.ID, "/workspace")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create container"})
+			return
+		}
 	} else {
 		sess, err = h.sessionManager.GetSession(sessionID)
 		if err != nil {
@@ -90,7 +100,20 @@ func (h *ChatHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
-	assistantResponse := "This is a placeholder response from x-agent"
+	responseStream, err := h.containerManager.Prompt(sess.ID, userMessage)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to execute prompt"})
+		return
+	}
+	defer responseStream.Close()
+
+	responseBytes, err := io.ReadAll(responseStream)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read response"})
+		return
+	}
+
+	assistantResponse := string(responseBytes)
 
 	if err := h.sessionManager.AddMessage(sess.ID, "assistant", assistantResponse); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save response"})
