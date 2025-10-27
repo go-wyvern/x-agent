@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业微信智能机器人 Mock - x-agent</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: #f5f5f5;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #app {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: #2c3e50;
+      color: white;
+      padding: 15px 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .header h1 {
+      font-size: 20px;
+      margin-bottom: 5px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .chat-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .chat-header {
+      padding: 15px 20px;
+      background: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header h2 {
+      font-size: 16px;
+      color: #333;
+    }
+
+    .chat-type-badge {
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-private {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .badge-group {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background: #f9f9f9;
+    }
+
+    .message {
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message.user {
+      align-items: flex-end;
+    }
+
+    .message.bot {
+      align-items: flex-start;
+    }
+
+    .message.system {
+      align-items: center;
+    }
+
+    .message-info {
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .message-content {
+      max-width: 70%;
+      padding: 10px 15px;
+      border-radius: 8px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .message.user .message-content {
+      background: #1976d2;
+      color: white;
+    }
+
+    .message.bot .message-content {
+      background: white;
+      color: #333;
+      border: 1px solid #e0e0e0;
+    }
+
+    .message.system .message-content {
+      background: #fff9c4;
+      color: #f57f17;
+      font-size: 12px;
+      padding: 8px 12px;
+      max-width: 90%;
+    }
+
+    .input-area {
+      padding: 15px 20px;
+      background: white;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .input-wrapper {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .input-group {
+      flex: 1;
+    }
+
+    .input-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      outline: none;
+      border-color: #1976d2;
+    }
+
+    textarea {
+      resize: none;
+      min-height: 60px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #1976d2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      background: #1565c0;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .config-panel {
+      width: 350px;
+      background: white;
+      padding: 20px;
+      overflow-y: auto;
+      border-left: 1px solid #e0e0e0;
+    }
+
+    .config-panel h3 {
+      font-size: 16px;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .config-section {
+      margin-bottom: 20px;
+    }
+
+    .config-section label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .webhook-response {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .webhook-response.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .webhook-response.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #1976d2;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .mention {
+      color: #1976d2;
+      font-weight: 500;
+    }
+
+    .quick-commands {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .quick-command {
+      padding: 4px 8px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .quick-command:hover {
+      background: #e0e0e0;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="header">
+      <h1>企业微信智能机器人 Mock UI</h1>
+      <p>本地测试企业微信回调 - Vue + TypeScript</p>
+    </div>
+
+    <div class="container">
+      <div class="chat-panel">
+        <div class="chat-header">
+          <h2>私聊</h2>
+          <span class="chat-type-badge badge-private">私聊模式</span>
+        </div>
+        <div class="messages-container" ref="privateMessages">
+          <div v-for="msg in privateMessages" :key="msg.id" :class="['message', msg.type]">
+            <div class="message-info" v-if="msg.type !== 'system'">
+              <span>{{ msg.sender }}</span>
+              <span>{{ msg.time }}</span>
+            </div>
+            <div class="message-content" v-html="msg.content"></div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="input-wrapper">
+            <div class="input-group">
+              <div class="input-label">发送消息</div>
+              <textarea 
+                v-model="privateInput" 
+                @keydown.enter.prevent="sendPrivateMessage"
+                placeholder="输入消息..."></textarea>
+              <div class="quick-commands">
+                <span class="quick-command" @click="privateInput = '/help'">/help</span>
+                <span class="quick-command" @click="privateInput = '/new'">/new</span>
+                <span class="quick-command" @click="privateInput = '/status'">/status</span>
+                <span class="quick-command" @click="privateInput = '/reset'">/reset</span>
+              </div>
+            </div>
+            <button @click="sendPrivateMessage" :disabled="!privateInput.trim() || privateSending">
+              {{ privateSending ? '发送中...' : '发送' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-panel">
+        <div class="chat-header">
+          <h2>群聊</h2>
+          <span class="chat-type-badge badge-group">群聊模式</span>
+        </div>
+        <div class="messages-container" ref="groupMessages">
+          <div v-for="msg in groupMessages" :key="msg.id" :class="['message', msg.type]">
+            <div class="message-info" v-if="msg.type !== 'system'">
+              <span>{{ msg.sender }}</span>
+              <span>{{ msg.time }}</span>
+            </div>
+            <div class="message-content" v-html="msg.content"></div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="input-wrapper">
+            <div class="input-group">
+              <div class="input-label">发送消息（群聊需要 @x-agent）</div>
+              <textarea 
+                v-model="groupInput" 
+                @keydown.enter.prevent="sendGroupMessage"
+                placeholder="@x-agent 输入消息..."></textarea>
+              <div class="quick-commands">
+                <span class="quick-command" @click="groupInput = '@x-agent /help'">@x-agent /help</span>
+                <span class="quick-command" @click="groupInput = '@x-agent /new'">@x-agent /new</span>
+                <span class="quick-command" @click="groupInput = '@x-agent 你好'">@x-agent 你好</span>
+              </div>
+            </div>
+            <button @click="sendGroupMessage" :disabled="!groupInput.trim() || groupSending">
+              {{ groupSending ? '发送中...' : '发送' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-panel">
+        <h3>⚙️ 配置</h3>
+        
+        <div class="config-section">
+          <label>Webhook 地址</label>
+          <input type="text" v-model="webhookUrl" placeholder="http://localhost:8080/api/wechat/webhook">
+        </div>
+
+        <div class="config-section">
+          <label>用户 ID (私聊)</label>
+          <input type="text" v-model="privateUserId" placeholder="user001">
+        </div>
+
+        <div class="config-section">
+          <label>用户名 (私聊)</label>
+          <input type="text" v-model="privateUserName" placeholder="张三">
+        </div>
+
+        <div class="config-section">
+          <label>群聊 ID</label>
+          <input type="text" v-model="groupChatId" placeholder="wrAAAAAAABgQAAAAAAAAAA">
+        </div>
+
+        <div class="config-section">
+          <label>用户 ID (群聊)</label>
+          <input type="text" v-model="groupUserId" placeholder="user002">
+        </div>
+
+        <div class="config-section">
+          <label>用户名 (群聊)</label>
+          <input type="text" v-model="groupUserName" placeholder="李四">
+        </div>
+
+        <div class="config-section">
+          <label>机器人名称</label>
+          <input type="text" v-model="botName" placeholder="x-agent">
+        </div>
+
+        <div v-if="lastWebhookResponse" class="webhook-response" :class="lastWebhookResponse.status">
+          <strong>{{ lastWebhookResponse.status === 'success' ? '✓ 成功' : '✗ 错误' }}</strong>
+          <pre style="margin-top: 5px; white-space: pre-wrap;">{{ lastWebhookResponse.message }}</pre>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+          <button @click="clearAllChats" style="width: 100%; background: #d32f2f;">
+            清空所有消息
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+
+    createApp({
+      data() {
+        return {
+          webhookUrl: 'http://localhost:8080/api/wechat/webhook',
+          privateUserId: 'user001',
+          privateUserName: '张三',
+          groupChatId: 'wrAAAAAAABgQAAAAAAAAAA',
+          groupUserId: 'user002',
+          groupUserName: '李四',
+          botName: 'x-agent',
+          
+          privateInput: '',
+          groupInput: '',
+          privateSending: false,
+          groupSending: false,
+          
+          privateMessages: [],
+          groupMessages: [],
+          
+          lastWebhookResponse: null,
+          messageIdCounter: 0
+        };
+      },
+      
+      methods: {
+        generateMsgId() {
+          return `msg_${Date.now()}_${this.messageIdCounter++}`;
+        },
+        
+        getCurrentTime() {
+          const now = new Date();
+          return now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        },
+        
+        addMessage(chatType, type, sender, content) {
+          const message = {
+            id: this.generateMsgId(),
+            type,
+            sender,
+            content,
+            time: this.getCurrentTime()
+          };
+          
+          if (chatType === 'private') {
+            this.privateMessages.push(message);
+            this.$nextTick(() => {
+              this.$refs.privateMessages.scrollTop = this.$refs.privateMessages.scrollHeight;
+            });
+          } else {
+            this.groupMessages.push(message);
+            this.$nextTick(() => {
+              this.$refs.groupMessages.scrollTop = this.$refs.groupMessages.scrollHeight;
+            });
+          }
+        },
+        
+        formatContent(text) {
+          return text.replace(/@x-agent/gi, '<span class="mention">@x-agent</span>');
+        },
+        
+        async sendPrivateMessage() {
+          if (!this.privateInput.trim() || this.privateSending) return;
+          
+          const content = this.privateInput.trim();
+          this.addMessage('private', 'user', this.privateUserName, this.formatContent(content));
+          
+          const webhookPayload = {
+            WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-private-key',
+            ChatId: this.privateUserId,
+            ChatType: 'single',
+            From: {
+              UserId: this.privateUserId,
+              Name: this.privateUserName,
+              Alias: this.privateUserId
+            },
+            MsgId: this.generateMsgId(),
+            MsgType: 'text',
+            Text: {
+              Content: content
+            }
+          };
+          
+          this.privateInput = '';
+          this.privateSending = true;
+          
+          await this.sendWebhookRequest('private', webhookPayload);
+          this.privateSending = false;
+        },
+        
+        async sendGroupMessage() {
+          if (!this.groupInput.trim() || this.groupSending) return;
+          
+          const content = this.groupInput.trim();
+          this.addMessage('group', 'user', this.groupUserName, this.formatContent(content));
+          
+          const webhookPayload = {
+            WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-group-key',
+            ChatId: this.groupChatId,
+            ChatType: 'group',
+            From: {
+              UserId: this.groupUserId,
+              Name: this.groupUserName,
+              Alias: this.groupUserId
+            },
+            MsgId: this.generateMsgId(),
+            MsgType: 'text',
+            Text: {
+              Content: content
+            }
+          };
+          
+          this.groupInput = '';
+          this.groupSending = true;
+          
+          await this.sendWebhookRequest('group', webhookPayload);
+          this.groupSending = false;
+        },
+        
+        async sendWebhookRequest(chatType, payload) {
+          try {
+            this.addMessage(chatType, 'system', '', '⏳ 正在发送 Webhook 请求...');
+            
+            const response = await fetch(this.webhookUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload)
+            });
+            
+            const responseData = await response.json();
+            
+            if (response.ok) {
+              this.lastWebhookResponse = {
+                status: 'success',
+                message: `状态码: ${response.status}\n响应: ${JSON.stringify(responseData, null, 2)}`
+              };
+              
+              this.addMessage(chatType, 'system', '', `✓ Webhook 请求成功 (${response.status})`);
+              
+              if (responseData.text && responseData.text.content) {
+                setTimeout(() => {
+                  this.addMessage(chatType, 'bot', this.botName, responseData.text.content);
+                }, 500);
+              }
+            } else {
+              throw new Error(`HTTP ${response.status}: ${JSON.stringify(responseData)}`);
+            }
+          } catch (error) {
+            this.lastWebhookResponse = {
+              status: 'error',
+              message: error.message
+            };
+            this.addMessage(chatType, 'system', '', `✗ Webhook 请求失败: ${error.message}`);
+          }
+        },
+        
+        clearAllChats() {
+          if (confirm('确定要清空所有消息吗?')) {
+            this.privateMessages = [];
+            this.groupMessages = [];
+            this.lastWebhookResponse = null;
+          }
+        }
+      },
+      
+      mounted() {
+        this.addMessage('private', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (私聊模式)');
+        this.addMessage('group', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (群聊模式，需要 @x-agent)');
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
