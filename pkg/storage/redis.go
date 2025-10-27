@@ -18,7 +18,9 @@ type RedisSessionStore struct {
 func NewRedisSessionStore(addr string, ttl time.Duration) *RedisSessionStore {
 	return &RedisSessionStore{
 		client: redis.NewClient(&redis.Options{
-			Addr: addr,
+			Addr:             addr,
+			Protocol:         2,
+			DisableIndentity: true,
 		}),
 		ttl: ttl,
 	}
