@@ -23,9 +23,9 @@ func NewChatHandler(sm *session.SessionManager, cm *container.Manager) *ChatHand
 }
 
 type ChatCompletionRequest struct {
-	Model    string          `json:"model"`
-	Messages []MessageInput  `json:"messages"`
-	Stream   bool            `json:"stream"`
+	Model    string         `json:"model"`
+	Messages []MessageInput `json:"messages"`
+	Stream   bool           `json:"stream"`
 }
 
 type MessageInput struct {
@@ -100,7 +100,13 @@ func (h *ChatHandler) HandleChatCompletion(c *gin.Context) {
 		return
 	}
 
-	responseStream, err := h.containerManager.Prompt(sess.ID, userMessage)
+	container, err := h.containerManager.GetContainer(sess.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "container not found"})
+		return
+	}
+
+	responseStream, err := container.Prompt(userMessage)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to execute prompt"})
 		return

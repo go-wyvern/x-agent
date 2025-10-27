@@ -9,7 +9,10 @@ import (
 )
 
 func main() {
-	manager, err := container.NewManager("xagent:latest")
+	config := &container.Config{
+		ImageTag: "xagent:latest",
+	}
+	manager, err := container.NewManager(config)
 	if err != nil {
 		log.Fatalf("Failed to create manager: %v", err)
 	}
@@ -34,17 +37,17 @@ func main() {
 	fmt.Printf("Container status: %s\n", status)
 
 	message := "List the files in the current directory"
-	reader, err := manager.Prompt(sessionID, message)
+	reader, err := c.Prompt(message)
 	if err != nil {
 		log.Fatalf("Failed to execute claude: %v", err)
 	}
 	defer reader.Close()
-	
+
 	output := make([]byte, 1024*64)
 	n, _ := reader.Read(output)
 	fmt.Printf("Claude output:\n%s\n", string(output[:n]))
 
-	logs, err := manager.GetContainerLogs(sessionID, "50")
+	logs, err := c.Logs("50")
 	if err != nil {
 		log.Fatalf("Failed to get logs: %v", err)
 	}

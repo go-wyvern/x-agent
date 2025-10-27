@@ -1,27 +1,33 @@
 package container
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 )
+
+type Config struct {
+	ImageTag              string
+	AnthropicAPIKey       string
+	AnthropicBaseURL      string
+	AnthropicAuthToken    string
+	AnthropicModel        string
+	AnthropicDefaultModel string
+}
 
 type Manager struct {
 	client     *client.Client
 	containers map[string]*Container
 	mutex      sync.RWMutex
-	imageTag   string
+	config     *Config
 }
 
-func NewManager(imageTag string) (*Manager, error) {
+func NewManager(config *Config) (*Manager, error) {
 	dockerClient, err := client.NewClientWithOpts(
 		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
@@ -33,7 +39,7 @@ func NewManager(imageTag string) (*Manager, error) {
 	return &Manager{
 		client:     dockerClient,
 		containers: make(map[string]*Container),
-		imageTag:   imageTag,
+		config:     config,
 	}, nil
 }
 
@@ -41,7 +47,7 @@ func (m *Manager) CreateContainer(sessionID, workspacePath string) (*Container, 
 	containerName := fmt.Sprintf("xagent-session-%s", sessionID)
 
 	config := &container.Config{
-		Image: m.imageTag,
+		Image: m.config.ImageTag,
 		Cmd:   []string{"tail", "-f", "/dev/null"},
 		Tty:   true,
 	}
@@ -82,6 +88,7 @@ func (m *Manager) CreateContainer(sessionID, workspacePath string) (*Container, 
 		Status:        ContainerRunning,
 		CreatedAt:     time.Now(),
 		LastUsedAt:    time.Now(),
+		manager:       m,
 	}
 
 	m.mutex.Lock()
@@ -150,54 +157,6 @@ func (m *Manager) CheckContainerStatus(sessionID string) (ContainerStatus, error
 	return ContainerStopped, nil
 }
 
-func (m *Manager) Prompt(sessionID, message string) (io.ReadCloser, error) {
-	m.mutex.RLock()
-	c := m.containers[sessionID]
-	m.mutex.RUnlock()
-
-	if c == nil {
-		return nil, fmt.Errorf("container not found for session %s", sessionID)
-	}
-
-	mcpConfigPath := "/etc/claude/mcp-config.json"
-	cmd := []string{
-		"claude",
-		"--mcp-config", mcpConfigPath,
-		"--dangerously-skip-permissions",
-		"-c",
-		"-p", message,
-	}
-
-	execConfig := container.ExecOptions{
-		Cmd:          cmd,
-		AttachStdout: true,
-		AttachStderr: true,
-		Tty:          false,
-	}
-
-	execID, err := m.client.ContainerExecCreate(
-		context.Background(),
-		c.ContainerID,
-		execConfig,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create exec: %w", err)
-	}
-
-	resp, err := m.client.ContainerExecAttach(
-		context.Background(),
-		execID.ID,
-		container.ExecStartOptions{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to attach exec: %w", err)
-	}
-
-	c.LastUsedAt = time.Now()
-	log.Printf("Executed claude-code in container %s for session %s", c.ContainerName, sessionID)
-	return resp.Conn, nil
-}
-
 func (m *Manager) StartCleanupScheduler(interval time.Duration, idleTimeout time.Duration) {
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -230,36 +189,6 @@ func (m *Manager) cleanupIdleContainers(idleTimeout time.Duration) {
 			log.Printf("Cleaned up idle container %s for session %s", c.ContainerName, sessionID)
 		}
 	}
-}
-
-func (m *Manager) GetContainerLogs(sessionID string, tail string) (string, error) {
-	m.mutex.RLock()
-	c := m.containers[sessionID]
-	m.mutex.RUnlock()
-
-	if c == nil {
-		return "", fmt.Errorf("container not found for session %s", sessionID)
-	}
-
-	options := container.LogsOptions{
-		ShowStdout: true,
-		ShowStderr: true,
-		Tail:       tail,
-	}
-
-	logs, err := m.client.ContainerLogs(context.Background(), c.ContainerID, options)
-	if err != nil {
-		return "", fmt.Errorf("failed to get container logs: %w", err)
-	}
-	defer logs.Close()
-
-	buf := new(bytes.Buffer)
-	_, err = stdcopy.StdCopy(buf, buf, logs)
-	if err != nil {
-		return "", fmt.Errorf("failed to read logs: %w", err)
-	}
-
-	return buf.String(), nil
 }
 
 func (m *Manager) Close() error {

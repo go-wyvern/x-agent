@@ -20,7 +20,20 @@ func main() {
 
 	sessionManager.StartCleanupScheduler(1 * time.Hour)
 
-	containerManager, err := container.NewManager("ghcr.io/anthropics/claude-code:latest")
+	containerConfig := &container.Config{
+		ImageTag:              os.Getenv("IMAGE_TAG"),
+		AnthropicAPIKey:       os.Getenv("ANTHROPIC_API_KEY"),
+		AnthropicBaseURL:      os.Getenv("ANTHROPIC_BASE_URL"),
+		AnthropicAuthToken:    os.Getenv("ANTHROPIC_AUTH_TOKEN"),
+		AnthropicModel:        os.Getenv("ANTHROPIC_MODEL"),
+		AnthropicDefaultModel: os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL"),
+	}
+
+	if containerConfig.ImageTag == "" {
+		containerConfig.ImageTag = "x-agent:latest"
+	}
+
+	containerManager, err := container.NewManager(containerConfig)
 	if err != nil {
 		log.Fatalf("Failed to create container manager: %v", err)
 	}

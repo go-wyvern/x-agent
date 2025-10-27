@@ -122,7 +122,14 @@ func (h *Handler) processWebhookMessage(msg *WebhookMessage) {
 		log.Printf("Failed to save user message: %v", err)
 	}
 
-	responseStream, err := h.containerManager.Prompt(sessionID, content)
+	container, err := h.containerManager.GetContainer(sessionID)
+	if err != nil {
+		log.Printf("Failed to get container: %v", err)
+		h.sendWebhookMessage(msg.WebhookURL, "抱歉，容器未找到，请稍后重试")
+		return
+	}
+
+	responseStream, err := container.Prompt(content)
 	if err != nil {
 		log.Printf("Failed to execute prompt: %v", err)
 		h.sendWebhookMessage(msg.WebhookURL, "抱歉，处理消息时出错了，请稍后重试")
