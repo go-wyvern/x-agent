@@ -1,24 +1,34 @@
-FROM ubuntu:22.04
+FROM node:18-alpine
 
-# Install basic dependencies
-RUN apt-get update && apt-get install -y \
+# Install basic dependencies (using apk for Alpine Linux)
+RUN apk add --no-cache \
     curl \
     git \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates
 
-# Install claude-code
-RUN curl -fsSL https://claude.ai/install.sh | sh
+# Install claude-code via npm
+RUN npm install -g @anthropic-ai/claude-code
+
+# 添加用户 (Alpine Linux 方式)
+RUN addgroup -g 24368 x-agent && adduser -u 24368 -G x-agent -h /home/x-agent -s /bin/sh -D x-agent
+
+# Create claude config directory
+RUN mkdir -p /etc/claude
+
+# Copy MCP configuration
+COPY mcp-config.json /etc/claude/mcp-config.json
 
 # Configure working directory
 WORKDIR /workspace
 
-# Copy MCP configuration template
-COPY mcp-config.json /etc/claude/mcp-config.json
+# Change ownership of workspace and config to x-agent user
+RUN chown -R x-agent:x-agent /workspace /etc/claude
 
 # Set environment variables
-ENV CLAUDE_API_KEY=""
 ENV MCP_CONFIG_PATH="/etc/claude/mcp-config.json"
+
+# Switch to non-root user
+USER x-agent
 
 # Startup command (keep container running)
 CMD ["tail", "-f", "/dev/null"]
