@@ -267,40 +267,6 @@ Webhook 消息接收端点（智能机器人模式）
 4. **容器资源**: 注意 Docker 容器资源使用情况
 5. **异步处理**: 消息处理是异步的，避免 Webhook 超时
 
-## 开发和测试
-
-### 本地开发
-
-使用 ngrok 等工具将本地服务暴露到公网：
-
-```bash
-ngrok http 8080
-```
-
-然后使用 ngrok 提供的 URL 配置企业微信 Webhook 地址。
-
-### 单元测试
-
-```bash
-go test ./internal/wechat/...
-```
-
-## 与旧版本的区别
-
-### 旧版本（Custom Application 模式）
-- 复杂的 AES-256-CBC 加密/解密
-- Access Token 管理
-- 需要配置 CorpID, AgentID, Secret, Token, EncodingAESKey
-- 不支持群聊（需要 App Chat API）
-- 用户需要在"工作台"中找到应用
-
-### 新版本（Smart Robot 模式）
-- ✅ 简化的 Webhook Key 验证
-- ✅ 无需 Access Token 管理
-- ✅ 只需配置 Webhook Key
-- ✅ 原生群聊支持（@mention）
-- ✅ 直接添加到任意群聊
-
 ## 参考资料
 
 - [企业微信 API 文档](https://developer.work.weixin.qq.com/document/)
