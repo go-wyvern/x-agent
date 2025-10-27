@@ -30,7 +30,7 @@ func main() {
 	}
 
 	if containerConfig.ImageTag == "" {
-		containerConfig.ImageTag = "ghcr.io/anthropics/claude-code:latest"
+		containerConfig.ImageTag = "x-agent:latest"
 	}
 
 	containerManager, err := container.NewManager(containerConfig)
