@@ -9,7 +9,10 @@ import (
 )
 
 func main() {
-	manager, err := container.NewManager("xagent:latest", "")
+	config := &container.Config{
+		ImageTag: "xagent:latest",
+	}
+	manager, err := container.NewManager(config)
 	if err != nil {
 		log.Fatalf("Failed to create manager: %v", err)
 	}

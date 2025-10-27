@@ -11,15 +11,23 @@ import (
 	"github.com/docker/docker/client"
 )
 
-type Manager struct {
-	client        *client.Client
-	containers    map[string]*Container
-	mutex         sync.RWMutex
-	imageTag      string
-	claudeCodeKey string
+type Config struct {
+	ImageTag              string
+	AnthropicAPIKey       string
+	AnthropicBaseURL      string
+	AnthropicAuthToken    string
+	AnthropicModel        string
+	AnthropicDefaultModel string
 }
 
-func NewManager(imageTag string, claudeCodeKey string) (*Manager, error) {
+type Manager struct {
+	client     *client.Client
+	containers map[string]*Container
+	mutex      sync.RWMutex
+	config     *Config
+}
+
+func NewManager(config *Config) (*Manager, error) {
 	dockerClient, err := client.NewClientWithOpts(
 		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
@@ -29,10 +37,9 @@ func NewManager(imageTag string, claudeCodeKey string) (*Manager, error) {
 	}
 
 	return &Manager{
-		client:        dockerClient,
-		containers:    make(map[string]*Container),
-		imageTag:      imageTag,
-		claudeCodeKey: claudeCodeKey,
+		client:     dockerClient,
+		containers: make(map[string]*Container),
+		config:     config,
 	}, nil
 }
 
@@ -40,7 +47,7 @@ func (m *Manager) CreateContainer(sessionID, workspacePath string) (*Container, 
 	containerName := fmt.Sprintf("xagent-session-%s", sessionID)
 
 	config := &container.Config{
-		Image: m.imageTag,
+		Image: m.config.ImageTag,
 		Cmd:   []string{"tail", "-f", "/dev/null"},
 		Tty:   true,
 	}
