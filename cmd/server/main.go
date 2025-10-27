@@ -20,7 +20,9 @@ func main() {
 
 	sessionManager.StartCleanupScheduler(1 * time.Hour)
 
-	containerManager, err := container.NewManager("ghcr.io/anthropics/claude-code:latest")
+	claudeCodeKey := os.Getenv("CLAUDE_CODE_KEY")
+
+	containerManager, err := container.NewManager("ghcr.io/anthropics/claude-code:latest", claudeCodeKey)
 	if err != nil {
 		log.Fatalf("Failed to create container manager: %v", err)
 	}

@@ -1,15 +1,15 @@
 package wechat
 
 type WebhookMessage struct {
-	WebhookURL string      `json:"WebhookUrl"`
-	ChatID     string      `json:"ChatId"`
-	ChatType   string      `json:"ChatType"`
-	GetChatInfoURL string  `json:"GetChatInfoUrl"`
-	From       MessageFrom `json:"From"`
-	MsgID      string      `json:"MsgId"`
-	MsgType    string      `json:"MsgType"`
-	Text       MessageText `json:"Text"`
-	Event      EventInfo   `json:"Event,omitempty"`
+	WebhookURL     string      `json:"WebhookUrl"`
+	ChatID         string      `json:"ChatId"`
+	ChatType       string      `json:"ChatType"`
+	GetChatInfoURL string      `json:"GetChatInfoUrl"`
+	From           MessageFrom `json:"From"`
+	MsgID          string      `json:"MsgId"`
+	MsgType        string      `json:"MsgType"`
+	Text           MessageText `json:"Text"`
+	Event          EventInfo   `json:"Event,omitempty"`
 }
 
 type MessageFrom struct {
@@ -23,7 +23,7 @@ type MessageText struct {
 }
 
 type EventInfo struct {
-	EventType string `json:"EventType"`
+	EventType    string `json:"EventType"`
 	ActionUserID string `json:"ActionUserId,omitempty"`
 }
 
