@@ -15,7 +15,9 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
 	redisHost := os.Getenv("REDIS_HOST")
 	if redisHost == "" {
