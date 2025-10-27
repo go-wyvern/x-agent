@@ -167,17 +167,20 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	log.Printf("Received text message: %s", content)
 
 	streamID := generateStreamID()
-	userID := "user_default"
+	botID := msg.ToUserName
+	if botID == "" {
+		botID = "bot_default"
+	}
 
-	sessionID := h.userSessionStore.GetSession(userID)
+	sessionID := h.userSessionStore.GetSession(botID)
 	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
+		sess, err := h.sessionManager.CreateSession(botID)
 		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
+			log.Printf("Failed to create session for %s: %v", botID, err)
 			return h.createErrorResponse(streamID, "创建会话失败", nonce, timestamp)
 		}
 		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
+		h.userSessionStore.SetSession(botID, sessionID)
 
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
@@ -187,11 +190,12 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	}
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
-		SessionID: sessionID,
-		UserID:    userID,
-		Question:  content,
-		Step:      0,
-		MaxSteps:  10,
+		SessionID:      sessionID,
+		UserID:         botID,
+		Question:       content,
+		Step:           0,
+		MaxSteps:       10,
+		ResponseChunks: []string{},
 	})
 
 	if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
@@ -222,6 +226,12 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
 			log.Printf("Failed to save assistant message: %v", err)
 		}
+
+		data := h.streamStore.GetStreamData(streamID)
+		if data != nil {
+			data.ResponseChunks = append(data.ResponseChunks, assistantResponse)
+			h.streamStore.SetStreamData(streamID, data)
+		}
 	}()
 
 	answer := fmt.Sprintf("收到问题：%s\n处理步骤 0: 已完成\n", content)
@@ -242,15 +252,29 @@ func (h *Handler) handleStreamMessage(msg *IncomingMessage, nonce, timestamp str
 		return h.createTextStreamResponse(streamID, "任务不存在或已过期", true, nonce, timestamp)
 	}
 
-	data.Step++
-	h.streamStore.SetStreamData(streamID, data)
+	// Check if response chunks are available
+	var answer string
+	var finish bool
 
-	answer := fmt.Sprintf("收到问题：%s\n", data.Question)
-	for i := 0; i < data.Step; i++ {
-		answer += fmt.Sprintf("处理步骤 %d: 已完成\n", i)
+	if len(data.ResponseChunks) > 0 {
+		// Response is ready, return it
+		answer = data.ResponseChunks[0]
+		finish = true
+		log.Printf("Returning response for stream %s: %d bytes", streamID, len(answer))
+	} else {
+		// Response not ready yet, increment step and return progress
+		data.Step++
+		h.streamStore.SetStreamData(streamID, data)
+
+		answer = fmt.Sprintf("收到问题：%s\n", data.Question)
+		for i := 0; i < data.Step; i++ {
+			answer += fmt.Sprintf("处理步骤 %d: 已完成\n", i)
+		}
+
+		// Check if we've reached max steps without a response
+		finish = data.Step >= data.MaxSteps
 	}
 
-	finish := data.Step >= data.MaxSteps
 	return h.createTextStreamResponse(streamID, answer, finish, nonce, timestamp)
 }
 

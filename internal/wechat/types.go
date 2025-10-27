@@ -5,12 +5,13 @@ type EncryptedRequest struct {
 }
 
 type IncomingMessage struct {
-	MsgType string      `json:"msgtype"`
-	Text    *TextMsg    `json:"text,omitempty"`
-	Image   *ImageMsg   `json:"image,omitempty"`
-	Stream  *StreamMsg  `json:"stream,omitempty"`
-	Event   *EventMsg   `json:"event,omitempty"`
-	Mixed   interface{} `json:"mixed,omitempty"`
+	ToUserName string      `json:"to_user_name"`
+	MsgType    string      `json:"msgtype"`
+	Text       *TextMsg    `json:"text,omitempty"`
+	Image      *ImageMsg   `json:"image,omitempty"`
+	Stream     *StreamMsg  `json:"stream,omitempty"`
+	Event      *EventMsg   `json:"event,omitempty"`
+	Mixed      interface{} `json:"mixed,omitempty"`
 }
 
 type TextMsg struct {
