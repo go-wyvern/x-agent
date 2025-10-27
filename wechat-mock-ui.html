@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>企业微信智能机器人 Mock - x-agent</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -295,6 +296,54 @@
     .quick-command:hover {
       background: #e0e0e0;
     }
+
+    .mode-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .mode-button {
+      flex: 1;
+      padding: 8px;
+      background: #f0f0f0;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .mode-button.active {
+      background: #1976d2;
+      color: white;
+      border-color: #1976d2;
+    }
+
+    .mode-button:hover {
+      background: #e0e0e0;
+    }
+
+    .mode-button.active:hover {
+      background: #1565c0;
+    }
+
+    .test-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .test-button {
+      width: 100%;
+      background: #4caf50;
+      margin-bottom: 10px;
+    }
+
+    .test-button:hover {
+      background: #43a047;
+    }
   </style>
 </head>
 <body>
@@ -379,9 +428,38 @@
       <div class="config-panel">
         <h3>⚙️ 配置</h3>
         
-        <div class="config-section">
+        <div class="mode-selector">
+          <div class="mode-button" :class="{active: mode === 'webhook'}" @click="mode = 'webhook'">
+            Webhook (旧版)
+          </div>
+          <div class="mode-button" :class="{active: mode === 'callback'}" @click="mode = 'callback'">
+            Callback (加密)
+          </div>
+        </div>
+
+        <div class="config-section" v-if="mode === 'webhook'">
           <label>Webhook 地址</label>
           <input type="text" v-model="webhookUrl" placeholder="http://localhost:8080/api/wechat/webhook">
+        </div>
+
+        <div class="config-section" v-if="mode === 'callback'">
+          <label>Callback 地址</label>
+          <input type="text" v-model="callbackUrl" placeholder="http://localhost:8080/api/wechat/callback">
+        </div>
+
+        <div class="config-section" v-if="mode === 'callback'">
+          <label>Bot ID</label>
+          <input type="text" v-model="botId" placeholder="bot001">
+        </div>
+
+        <div class="config-section" v-if="mode === 'callback'">
+          <label>Token</label>
+          <input type="text" v-model="token" placeholder="your_token_here">
+        </div>
+
+        <div class="config-section" v-if="mode === 'callback'">
+          <label>EncodingAESKey (43位)</label>
+          <input type="text" v-model="encodingAESKey" placeholder="abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG">
         </div>
 
         <div class="config-section">
@@ -414,6 +492,13 @@
           <input type="text" v-model="botName" placeholder="x-agent">
         </div>
 
+        <div class="test-section" v-if="mode === 'callback'">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">测试功能</h3>
+          <button class="test-button" @click="testUrlVerification" :disabled="testing">
+            {{ testing ? '测试中...' : '测试 URL 验证' }}
+          </button>
+        </div>
+
         <div v-if="lastWebhookResponse" class="webhook-response" :class="lastWebhookResponse.status">
           <strong>{{ lastWebhookResponse.status === 'success' ? '✓ 成功' : '✗ 错误' }}</strong>
           <pre style="margin-top: 5px; white-space: pre-wrap;">{{ lastWebhookResponse.message }}</pre>
@@ -434,7 +519,13 @@
     createApp({
       data() {
         return {
+          mode: 'callback',
           webhookUrl: 'http://localhost:8080/api/wechat/webhook',
+          callbackUrl: 'http://localhost:8080/api/wechat/callback',
+          botId: 'bot001',
+          token: '',
+          encodingAESKey: '',
+          
           privateUserId: 'user001',
           privateUserName: '张三',
           groupChatId: 'wrAAAAAAABgQAAAAAAAAAA',
@@ -446,6 +537,7 @@
           groupInput: '',
           privateSending: false,
           groupSending: false,
+          testing: false,
           
           privateMessages: [],
           groupMessages: [],
@@ -497,26 +589,30 @@
           const content = this.privateInput.trim();
           this.addMessage('private', 'user', this.privateUserName, this.formatContent(content));
           
-          const webhookPayload = {
-            WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-private-key',
-            ChatId: this.privateUserId,
-            ChatType: 'single',
-            From: {
-              UserId: this.privateUserId,
-              Name: this.privateUserName,
-              Alias: this.privateUserId
-            },
-            MsgId: this.generateMsgId(),
-            MsgType: 'text',
-            Text: {
-              Content: content
-            }
-          };
-          
           this.privateInput = '';
           this.privateSending = true;
           
-          await this.sendWebhookRequest('private', webhookPayload);
+          if (this.mode === 'webhook') {
+            const webhookPayload = {
+              WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-private-key',
+              ChatId: this.privateUserId,
+              ChatType: 'single',
+              From: {
+                UserId: this.privateUserId,
+                Name: this.privateUserName,
+                Alias: this.privateUserId
+              },
+              MsgId: this.generateMsgId(),
+              MsgType: 'text',
+              Text: {
+                Content: content
+              }
+            };
+            await this.sendWebhookRequest('private', webhookPayload);
+          } else {
+            await this.sendCallbackMessage('private', content);
+          }
+          
           this.privateSending = false;
         },
         
@@ -526,26 +622,30 @@
           const content = this.groupInput.trim();
           this.addMessage('group', 'user', this.groupUserName, this.formatContent(content));
           
-          const webhookPayload = {
-            WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-group-key',
-            ChatId: this.groupChatId,
-            ChatType: 'group',
-            From: {
-              UserId: this.groupUserId,
-              Name: this.groupUserName,
-              Alias: this.groupUserId
-            },
-            MsgId: this.generateMsgId(),
-            MsgType: 'text',
-            Text: {
-              Content: content
-            }
-          };
-          
           this.groupInput = '';
           this.groupSending = true;
           
-          await this.sendWebhookRequest('group', webhookPayload);
+          if (this.mode === 'webhook') {
+            const webhookPayload = {
+              WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-group-key',
+              ChatId: this.groupChatId,
+              ChatType: 'group',
+              From: {
+                UserId: this.groupUserId,
+                Name: this.groupUserName,
+                Alias: this.groupUserId
+              },
+              MsgId: this.generateMsgId(),
+              MsgType: 'text',
+              Text: {
+                Content: content
+              }
+            };
+            await this.sendWebhookRequest('group', webhookPayload);
+          } else {
+            await this.sendCallbackMessage('group', content);
+          }
+          
           this.groupSending = false;
         },
         
@@ -588,6 +688,180 @@
           }
         },
         
+        async sendCallbackMessage(chatType, content) {
+          try {
+            this.addMessage(chatType, 'system', '', '⏳ 正在发送加密消息...');
+            
+            const message = {
+              msgtype: 'text',
+              text: {
+                content: content
+              }
+            };
+            
+            const messageJson = JSON.stringify(message);
+            const timestamp = Math.floor(Date.now() / 1000).toString();
+            const nonce = this.generateNonce();
+            
+            const encrypted = this.encryptMsg(messageJson, this.encodingAESKey, '');
+            const msgSignature = this.calculateSignature(this.token, timestamp, nonce, encrypted);
+            
+            const encryptedPayload = {
+              encrypt: encrypted
+            };
+            
+            const url = `${this.callbackUrl}/${this.botId}?msg_signature=${msgSignature}&timestamp=${timestamp}&nonce=${nonce}`;
+            
+            const response = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(encryptedPayload)
+            });
+            
+            if (response.ok) {
+              const responseText = await response.text();
+              
+              this.lastWebhookResponse = {
+                status: 'success',
+                message: `状态码: ${response.status}\n响应: ${responseText}`
+              };
+              
+              this.addMessage(chatType, 'system', '', `✓ 加密消息发送成功 (${response.status})`);
+              
+              if (responseText && responseText !== 'success') {
+                try {
+                  const respData = JSON.parse(responseText);
+                  if (respData.encrypt) {
+                    const decrypted = this.decryptMsg(respData.encrypt, respData.msgsignature, respData.timestamp, respData.nonce, this.token, this.encodingAESKey, '');
+                    const decryptedObj = JSON.parse(decrypted);
+                    
+                    if (decryptedObj.msgtype === 'stream' && decryptedObj.stream) {
+                      setTimeout(() => {
+                        this.addMessage(chatType, 'bot', this.botName, decryptedObj.stream.content || '处理中...');
+                      }, 500);
+                    }
+                  }
+                } catch (e) {
+                  console.log('Response is not encrypted or invalid:', e);
+                }
+              }
+            } else {
+              throw new Error(`HTTP ${response.status}`);
+            }
+          } catch (error) {
+            this.lastWebhookResponse = {
+              status: 'error',
+              message: error.message
+            };
+            this.addMessage(chatType, 'system', '', `✗ 加密消息发送失败: ${error.message}`);
+          }
+        },
+        
+        async testUrlVerification() {
+          if (!this.token || !this.encodingAESKey) {
+            alert('请先配置 Token 和 EncodingAESKey');
+            return;
+          }
+          
+          this.testing = true;
+          try {
+            const timestamp = Math.floor(Date.now() / 1000).toString();
+            const nonce = this.generateNonce();
+            const echoStr = this.encryptMsg('test_echo', this.encodingAESKey, '');
+            const msgSignature = this.calculateSignature(this.token, timestamp, nonce, echoStr);
+            
+            const url = `${this.callbackUrl}/${this.botId}?msg_signature=${msgSignature}&timestamp=${timestamp}&nonce=${nonce}&echostr=${encodeURIComponent(echoStr)}`;
+            
+            const response = await fetch(url, {
+              method: 'GET'
+            });
+            
+            const responseText = await response.text();
+            
+            if (response.ok && responseText === 'test_echo') {
+              this.lastWebhookResponse = {
+                status: 'success',
+                message: `URL 验证成功!\n响应: ${responseText}`
+              };
+              alert('✓ URL 验证成功!');
+            } else {
+              this.lastWebhookResponse = {
+                status: 'error',
+                message: `URL 验证失败\n状态码: ${response.status}\n响应: ${responseText}`
+              };
+              alert('✗ URL 验证失败，请检查配置');
+            }
+          } catch (error) {
+            this.lastWebhookResponse = {
+              status: 'error',
+              message: error.message
+            };
+            alert('✗ URL 验证失败: ' + error.message);
+          } finally {
+            this.testing = false;
+          }
+        },
+        
+        generateNonce() {
+          return Math.random().toString(36).substring(2, 15);
+        },
+        
+        calculateSignature(token, timestamp, nonce, encrypt) {
+          const arr = [token, timestamp, nonce, encrypt].sort();
+          const str = arr.join('');
+          return CryptoJS.SHA1(str).toString();
+        },
+        
+        encryptMsg(text, encodingAESKey, receiveId) {
+          const aesKey = CryptoJS.enc.Base64.parse(encodingAESKey + '=');
+          
+          const randomStr = CryptoJS.lib.WordArray.random(16);
+          const textBytes = CryptoJS.enc.Utf8.parse(text);
+          const textLength = CryptoJS.lib.WordArray.create([textBytes.sigBytes]);
+          const receiveIdBytes = CryptoJS.enc.Utf8.parse(receiveId);
+          
+          const content = randomStr.concat(textLength).concat(textBytes).concat(receiveIdBytes);
+          
+          const iv = CryptoJS.lib.WordArray.create(aesKey.words.slice(0, 4));
+          const encrypted = CryptoJS.AES.encrypt(content, aesKey, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+          });
+          
+          return encrypted.ciphertext.toString(CryptoJS.enc.Base64);
+        },
+        
+        decryptMsg(encryptedText, msgSignature, timestamp, nonce, token, encodingAESKey, receiveId) {
+          const signature = this.calculateSignature(token, timestamp, nonce, encryptedText);
+          if (signature !== msgSignature) {
+            throw new Error('Signature verification failed');
+          }
+          
+          const aesKey = CryptoJS.enc.Base64.parse(encodingAESKey + '=');
+          const iv = CryptoJS.lib.WordArray.create(aesKey.words.slice(0, 4));
+          
+          const decrypted = CryptoJS.AES.decrypt(encryptedText, aesKey, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+          });
+          
+          const decryptedWords = decrypted.words;
+          const textLength = (decryptedWords[4] << 24) | (decryptedWords[5] << 16) | (decryptedWords[6] << 8) | decryptedWords[7];
+          
+          const textStart = 20;
+          const textEnd = textStart + textLength;
+          
+          const textBytes = CryptoJS.lib.WordArray.create(
+            decryptedWords.slice(textStart / 4, Math.ceil(textEnd / 4))
+          );
+          
+          return CryptoJS.enc.Utf8.stringify(textBytes).substring(0, textLength);
+        },
+        
         clearAllChats() {
           if (confirm('确定要清空所有消息吗?')) {
             this.privateMessages = [];
@@ -600,6 +874,27 @@
       mounted() {
         this.addMessage('private', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (私聊模式)');
         this.addMessage('group', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (群聊模式，需要 @x-agent)');
+        
+        const savedMode = localStorage.getItem('wechat-mock-mode');
+        if (savedMode) this.mode = savedMode;
+        
+        const savedToken = localStorage.getItem('wechat-token');
+        if (savedToken) this.token = savedToken;
+        
+        const savedKey = localStorage.getItem('wechat-encoding-aes-key');
+        if (savedKey) this.encodingAESKey = savedKey;
+      },
+      
+      watch: {
+        mode(newMode) {
+          localStorage.setItem('wechat-mock-mode', newMode);
+        },
+        token(newToken) {
+          localStorage.setItem('wechat-token', newToken);
+        },
+        encodingAESKey(newKey) {
+          localStorage.setItem('wechat-encoding-aes-key', newKey);
+        }
       }
     }).mount('#app');
   </script>

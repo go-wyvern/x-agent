@@ -81,6 +81,7 @@ func main() {
 			log.Printf("Failed to create wechat handler: %v", err)
 		} else {
 			r.POST("/api/wechat/webhook", wechatHandler.ReceiveWebhook)
+			r.Any("/api/wechat/callback/:botid", wechatHandler.HandleCallback)
 			log.Println("WeChat Work Smart Robot integration enabled")
 		}
 	}
@@ -97,12 +98,15 @@ func main() {
 }
 
 func loadWechatConfig() *wechat.Config {
-	webhookKey := os.Getenv("WECHAT_WEBHOOK_KEY")
-	if webhookKey == "" {
+	token := os.Getenv("WECHAT_TOKEN")
+	encodingAESKey := os.Getenv("WECHAT_ENCODING_AES_KEY")
+
+	if token == "" || encodingAESKey == "" {
 		return nil
 	}
 
 	return &wechat.Config{
-		WebhookKey: webhookKey,
+		Token:          token,
+		EncodingAESKey: encodingAESKey,
 	}
 }

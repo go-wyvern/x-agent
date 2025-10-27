@@ -1,5 +1,60 @@
 package wechat
 
+type EncryptedRequest struct {
+	Encrypt string `json:"encrypt"`
+}
+
+type IncomingMessage struct {
+	MsgType string      `json:"msgtype"`
+	Text    *TextMsg    `json:"text,omitempty"`
+	Image   *ImageMsg   `json:"image,omitempty"`
+	Stream  *StreamMsg  `json:"stream,omitempty"`
+	Event   *EventMsg   `json:"event,omitempty"`
+	Mixed   interface{} `json:"mixed,omitempty"`
+}
+
+type TextMsg struct {
+	Content string `json:"content"`
+}
+
+type ImageMsg struct {
+	URL    string `json:"url"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+type StreamMsg struct {
+	ID     string `json:"id"`
+	Finish bool   `json:"finish,omitempty"`
+}
+
+type EventMsg struct {
+	EventType string `json:"event_type"`
+}
+
+type StreamResponse struct {
+	MsgType string             `json:"msgtype"`
+	Stream  StreamResponseData `json:"stream"`
+}
+
+type StreamResponseData struct {
+	ID      string          `json:"id"`
+	Finish  bool            `json:"finish"`
+	Content string          `json:"content,omitempty"`
+	MsgItem []StreamMsgItem `json:"msg_item,omitempty"`
+}
+
+type StreamMsgItem struct {
+	MsgType string           `json:"msgtype"`
+	Text    *TextMsg         `json:"text,omitempty"`
+	Image   *ImageMsgItem    `json:"image,omitempty"`
+}
+
+type ImageMsgItem struct {
+	Base64 string `json:"base64"`
+	MD5    string `json:"md5"`
+}
+
 type WebhookMessage struct {
 	WebhookURL     string      `json:"WebhookUrl"`
 	ChatID         string      `json:"ChatId"`
