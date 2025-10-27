@@ -6,9 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/go-wyvern/x-agent/internal/models"
 	"github.com/go-wyvern/x-agent/pkg/storage"
-	"github.com/google/uuid"
 )
 
 type SessionManager struct {

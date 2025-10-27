@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+
 	"github.com/go-wyvern/x-agent/internal/api"
 	"github.com/go-wyvern/x-agent/internal/session"
 	"github.com/go-wyvern/x-agent/internal/wechat"
 	"github.com/go-wyvern/x-agent/pkg/container"
 	"github.com/go-wyvern/x-agent/pkg/storage"
-	"github.com/joho/godotenv"
 )
 
 func main() {
