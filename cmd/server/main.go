@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -43,9 +42,8 @@ func main() {
 		if err != nil {
 			log.Printf("Failed to create wechat handler: %v", err)
 		} else {
-			r.GET("/api/wechat/callback", wechatHandler.VerifyURL)
-			r.POST("/api/wechat/callback", wechatHandler.ReceiveMessage)
-			log.Println("WeChat Work integration enabled")
+			r.POST("/api/wechat/webhook", wechatHandler.ReceiveWebhook)
+			log.Println("WeChat Work Smart Robot integration enabled")
 		}
 	}
 
@@ -56,35 +54,12 @@ func main() {
 }
 
 func loadWechatConfig() *wechat.Config {
-	corpID := os.Getenv("WECHAT_CORP_ID")
-	if corpID == "" {
-		return nil
-	}
-
-	agentIDStr := os.Getenv("WECHAT_AGENT_ID")
-	if agentIDStr == "" {
-		return nil
-	}
-
-	agentID, err := strconv.Atoi(agentIDStr)
-	if err != nil {
-		log.Printf("Invalid WECHAT_AGENT_ID: %v", err)
-		return nil
-	}
-
-	secret := os.Getenv("WECHAT_SECRET")
-	token := os.Getenv("WECHAT_TOKEN")
-	encodingAESKey := os.Getenv("WECHAT_ENCODING_AES_KEY")
-
-	if secret == "" || token == "" || encodingAESKey == "" {
+	webhookKey := os.Getenv("WECHAT_WEBHOOK_KEY")
+	if webhookKey == "" {
 		return nil
 	}
 
 	return &wechat.Config{
-		CorpID:         corpID,
-		AgentID:        agentID,
-		Secret:         secret,
-		Token:          token,
-		EncodingAESKey: encodingAESKey,
+		WebhookKey: webhookKey,
 	}
 }
