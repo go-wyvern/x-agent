@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+
 	"github.com/go-wyvern/x-agent/internal/api"
 	"github.com/go-wyvern/x-agent/internal/session"
 	"github.com/go-wyvern/x-agent/internal/wechat"
@@ -14,7 +16,16 @@ import (
 )
 
 func main() {
-	store := storage.NewRedisSessionStore("localhost:6379", 24*time.Hour)
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		redisHost = "localhost:6379"
+	}
+
+	store := storage.NewRedisSessionStore(redisHost, 24*time.Hour)
 
 	sessionManager := session.NewSessionManager(store, 24*time.Hour)
 
@@ -74,8 +85,13 @@ func main() {
 		}
 	}
 
-	log.Println("Starting x-agent server on :8080")
-	if err := r.Run(":8080"); err != nil {
+	serverPort := os.Getenv("SERVER_PORT")
+	if serverPort == "" {
+		serverPort = "8080"
+	}
+
+	log.Printf("Starting x-agent server on :%s", serverPort)
+	if err := r.Run(":" + serverPort); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-wyvern/x-agent/internal/models"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/go-wyvern/x-agent/internal/models"
 )
 
 type RedisSessionStore struct {

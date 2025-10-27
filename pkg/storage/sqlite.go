@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-wyvern/x-agent/internal/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/go-wyvern/x-agent/internal/models"
 )
 
 type SQLiteSessionStore struct {
