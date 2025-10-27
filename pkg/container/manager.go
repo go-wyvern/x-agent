@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	ImageTag              string
-	AnthropicAPIKey       string
-	AnthropicBaseURL      string
-	AnthropicAuthToken    string
-	AnthropicModel        string
-	AnthropicDefaultModel string
+	ImageTag                    string
+	AnthropicBaseURL            string
+	AnthropicAuthToken          string
+	AnthropicModel              string
+	AnthropicDefaultSonnetModel string
+	AnthropicDefaultHaikuModel  string
+	AnthropicSmallFastModel     string
 }
 
 type Manager struct {
@@ -50,6 +51,14 @@ func (m *Manager) CreateContainer(sessionID, workspacePath string) (*Container, 
 		Image: m.config.ImageTag,
 		Cmd:   []string{"tail", "-f", "/dev/null"},
 		Tty:   true,
+		Env: []string{
+			fmt.Sprintf("ANTHROPIC_BASE_URL=%s", m.config.AnthropicBaseURL),
+			fmt.Sprintf("ANTHROPIC_AUTH_TOKEN=%s", m.config.AnthropicAuthToken),
+			fmt.Sprintf("ANTHROPIC_MODEL=%s", m.config.AnthropicModel),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_SONNET_MODEL=%s", m.config.AnthropicDefaultSonnetModel),
+			fmt.Sprintf("ANTHROPIC_DEFAULT_HAIKU_MODEL=%s", m.config.AnthropicDefaultHaikuModel),
+			fmt.Sprintf("ANTHROPIC_SMALL_FAST_MODEL=%s", m.config.AnthropicSmallFastModel),
+		},
 	}
 
 	hostConfig := &container.HostConfig{

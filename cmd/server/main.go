@@ -21,12 +21,13 @@ func main() {
 	sessionManager.StartCleanupScheduler(1 * time.Hour)
 
 	containerConfig := &container.Config{
-		ImageTag:              os.Getenv("IMAGE_TAG"),
-		AnthropicAPIKey:       os.Getenv("ANTHROPIC_API_KEY"),
-		AnthropicBaseURL:      os.Getenv("ANTHROPIC_BASE_URL"),
-		AnthropicAuthToken:    os.Getenv("ANTHROPIC_AUTH_TOKEN"),
-		AnthropicModel:        os.Getenv("ANTHROPIC_MODEL"),
-		AnthropicDefaultModel: os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL"),
+		ImageTag:                    os.Getenv("IMAGE_TAG"),
+		AnthropicBaseURL:            os.Getenv("ANTHROPIC_BASE_URL"),
+		AnthropicAuthToken:          os.Getenv("ANTHROPIC_AUTH_TOKEN"),
+		AnthropicModel:              os.Getenv("ANTHROPIC_MODEL"),
+		AnthropicDefaultSonnetModel: os.Getenv("ANTHROPIC_DEFAULT_SONNET_MODEL"),
+		AnthropicDefaultHaikuModel:  os.Getenv("ANTHROPIC_DEFAULT_HAIKU_MODEL"),
+		AnthropicSmallFastModel:     os.Getenv("ANTHROPIC_SMALL_FAST_MODEL"),
 	}
 
 	if containerConfig.ImageTag == "" {
