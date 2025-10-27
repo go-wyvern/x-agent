@@ -46,6 +46,19 @@ func main() {
 
 	r := gin.Default()
 
+	r.Use(func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		
+		c.Next()
+	})
+
 	r.POST("/v1/chat/completions", chatHandler.HandleChatCompletion)
 	r.GET("/v1/sessions/:id", chatHandler.HandleGetSession)
 	r.DELETE("/v1/sessions/:id", chatHandler.HandleDeleteSession)
