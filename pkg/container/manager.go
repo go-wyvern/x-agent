@@ -12,12 +12,13 @@ import (
 )
 
 type Config struct {
-	ImageTag              string
-	AnthropicAPIKey       string
-	AnthropicBaseURL      string
-	AnthropicAuthToken    string
-	AnthropicModel        string
-	AnthropicDefaultModel string
+	ImageTag                    string
+	AnthropicBaseURL            string
+	AnthropicAuthToken          string
+	AnthropicModel              string
+	AnthropicDefaultSonnetModel string
+	AnthropicDefaultHaikuModel  string
+	AnthropicSmallFastModel     string
 }
 
 type Manager struct {
