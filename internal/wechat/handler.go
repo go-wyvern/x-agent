@@ -1,13 +1,16 @@
 package wechat
 
 import (
-	"bytes"
+	"crypto/md5"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -21,6 +24,7 @@ type Handler struct {
 	sessionManager   *session.SessionManager
 	containerManager *container.Manager
 	userSessionStore *UserSessionStore
+	streamStore      *StreamStore
 }
 
 func NewHandler(
@@ -28,7 +32,7 @@ func NewHandler(
 	sessionManager *session.SessionManager,
 	containerManager *container.Manager,
 ) (*Handler, error) {
-	crypto, err := NewCrypto(config.WebhookKey)
+	crypto, err := NewCrypto(config.Token, config.EncodingAESKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create crypto: %w", err)
 	}
@@ -39,7 +43,324 @@ func NewHandler(
 		sessionManager:   sessionManager,
 		containerManager: containerManager,
 		userSessionStore: NewUserSessionStore(),
+		streamStore:      NewStreamStore(),
 	}, nil
+}
+
+func (h *Handler) HandleCallback(c *gin.Context) {
+	if c.Request.Method == "GET" {
+		h.verifyURL(c)
+		return
+	}
+
+	h.handleMessage(c)
+}
+
+func (h *Handler) verifyURL(c *gin.Context) {
+	msgSignature := c.Query("msg_signature")
+	timestamp := c.Query("timestamp")
+	nonce := c.Query("nonce")
+	echoStr := c.Query("echostr")
+
+	log.Printf("Verifying URL: msg_signature=%s, timestamp=%s, nonce=%s", msgSignature, timestamp, nonce)
+
+	decrypted, err := h.crypto.VerifyURL(msgSignature, timestamp, nonce, echoStr)
+	if err != nil {
+		log.Printf("Failed to verify URL: %v", err)
+		c.String(http.StatusBadRequest, "verify fail")
+		return
+	}
+
+	log.Printf("URL verification successful: %s", decrypted)
+	c.String(http.StatusOK, decrypted)
+}
+
+func (h *Handler) handleMessage(c *gin.Context) {
+	msgSignature := c.Query("msg_signature")
+	timestamp := c.Query("timestamp")
+	nonce := c.Query("nonce")
+
+	if msgSignature == "" || timestamp == "" || nonce == "" {
+		log.Printf("Missing required parameters")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing parameters"})
+		return
+	}
+
+	log.Printf("Received message: msg_signature=%s, timestamp=%s, nonce=%s", msgSignature, timestamp, nonce)
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		log.Printf("Failed to read request body: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
+		return
+	}
+
+	var encReq EncryptedRequest
+	if err := json.Unmarshal(body, &encReq); err != nil {
+		log.Printf("Failed to unmarshal encrypted request: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
+		return
+	}
+
+	decrypted, err := h.crypto.DecryptMsg(encReq.Encrypt, msgSignature, timestamp, nonce, "")
+	if err != nil {
+		log.Printf("Failed to decrypt message: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "decryption failed"})
+		return
+	}
+
+	log.Printf("Decrypted message: %s", decrypted)
+
+	var msg IncomingMessage
+	if err := json.Unmarshal([]byte(decrypted), &msg); err != nil {
+		log.Printf("Failed to unmarshal decrypted message: %v", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid message format"})
+		return
+	}
+
+	response, err := h.processMessage(&msg, nonce, timestamp)
+	if err != nil {
+		log.Printf("Failed to process message: %v", err)
+		c.String(http.StatusOK, "success")
+		return
+	}
+
+	if response != "" {
+		c.Header("Content-Type", "application/json")
+		c.String(http.StatusOK, response)
+	} else {
+		c.String(http.StatusOK, "success")
+	}
+}
+
+func (h *Handler) processMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.MsgType == "" {
+		log.Printf("Unknown message type: %+v", msg)
+		return "", nil
+	}
+
+	switch msg.MsgType {
+	case "text":
+		return h.handleTextMessage(msg, nonce, timestamp)
+	case "stream":
+		return h.handleStreamMessage(msg, nonce, timestamp)
+	case "image":
+		return h.handleImageMessage(msg, nonce, timestamp)
+	case "mixed":
+		log.Printf("Mixed message type not yet supported")
+		return "", nil
+	case "event":
+		log.Printf("Event message: %+v", msg.Event)
+		return "", nil
+	default:
+		log.Printf("Unsupported message type: %s", msg.MsgType)
+		return "", nil
+	}
+}
+
+func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Text == nil {
+		return "", fmt.Errorf("text message has no content")
+	}
+
+	content := msg.Text.Content
+	log.Printf("Received text message: %s", content)
+
+	streamID := generateStreamID()
+	userID := "user_default"
+
+	sessionID := h.userSessionStore.GetSession(userID)
+	if sessionID == "" {
+		sess, err := h.sessionManager.CreateSession(userID)
+		if err != nil {
+			log.Printf("Failed to create session for %s: %v", userID, err)
+			return h.createErrorResponse(streamID, "创建会话失败", nonce, timestamp)
+		}
+		sessionID = sess.ID
+		h.userSessionStore.SetSession(userID, sessionID)
+
+		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
+		if err != nil {
+			log.Printf("Failed to create container for session %s: %v", sessionID, err)
+			return h.createErrorResponse(streamID, "创建容器失败", nonce, timestamp)
+		}
+	}
+
+	h.streamStore.SetStreamData(streamID, &StreamData{
+		SessionID: sessionID,
+		UserID:    userID,
+		Question:  content,
+		Step:      0,
+		MaxSteps:  10,
+	})
+
+	if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
+		log.Printf("Failed to save user message: %v", err)
+	}
+
+	container, err := h.containerManager.GetContainer(sessionID)
+	if err != nil {
+		log.Printf("Failed to get container: %v", err)
+		return h.createErrorResponse(streamID, "容器未找到", nonce, timestamp)
+	}
+
+	go func() {
+		responseStream, err := container.Prompt(content)
+		if err != nil {
+			log.Printf("Failed to execute prompt: %v", err)
+			return
+		}
+		defer responseStream.Close()
+
+		responseBytes, err := io.ReadAll(responseStream)
+		if err != nil {
+			log.Printf("Failed to read response: %v", err)
+			return
+		}
+
+		assistantResponse := string(responseBytes)
+		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
+			log.Printf("Failed to save assistant message: %v", err)
+		}
+	}()
+
+	answer := fmt.Sprintf("收到问题：%s\n处理步骤 0: 已完成\n", content)
+	return h.createTextStreamResponse(streamID, answer, false, nonce, timestamp)
+}
+
+func (h *Handler) handleStreamMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Stream == nil {
+		return "", fmt.Errorf("stream message has no stream data")
+	}
+
+	streamID := msg.Stream.ID
+	log.Printf("Received stream request for ID: %s", streamID)
+
+	data := h.streamStore.GetStreamData(streamID)
+	if data == nil {
+		log.Printf("Stream data not found for ID: %s", streamID)
+		return h.createTextStreamResponse(streamID, "任务不存在或已过期", true, nonce, timestamp)
+	}
+
+	data.Step++
+	h.streamStore.SetStreamData(streamID, data)
+
+	answer := fmt.Sprintf("收到问题：%s\n", data.Question)
+	for i := 0; i < data.Step; i++ {
+		answer += fmt.Sprintf("处理步骤 %d: 已完成\n", i)
+	}
+
+	finish := data.Step >= data.MaxSteps
+	return h.createTextStreamResponse(streamID, answer, finish, nonce, timestamp)
+}
+
+func (h *Handler) handleImageMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Image == nil {
+		return "", fmt.Errorf("image message has no image data")
+	}
+
+	log.Printf("Received image message: %s", msg.Image.URL)
+
+	imageData, err := h.downloadAndDecryptImage(msg.Image.URL)
+	if err != nil {
+		log.Printf("Failed to process image: %v", err)
+		streamID := generateStreamID()
+		return h.createErrorResponse(streamID, "图片处理失败", nonce, timestamp)
+	}
+
+	streamID := generateStreamID()
+	return h.createImageStreamResponse(streamID, imageData, true, nonce, timestamp)
+}
+
+func (h *Handler) downloadAndDecryptImage(imageURL string) ([]byte, error) {
+	resp, err := http.Get(imageURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download image: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("image download returned status %d", resp.StatusCode)
+	}
+
+	encryptedData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read image data: %w", err)
+	}
+
+	log.Printf("Downloaded encrypted image, size: %d bytes", len(encryptedData))
+
+	decryptedData, err := h.decryptImageData(encryptedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt image: %w", err)
+	}
+
+	log.Printf("Image decrypted successfully, size: %d bytes", len(decryptedData))
+	return decryptedData, nil
+}
+
+func (h *Handler) decryptImageData(encryptedData []byte) ([]byte, error) {
+	aesKey := h.crypto.aesKey
+	iv := aesKey[:16]
+
+	return decryptAESCBC(encryptedData, aesKey, iv)
+}
+
+func (h *Handler) createTextStreamResponse(streamID, content string, finish bool, nonce, timestamp string) (string, error) {
+	stream := StreamResponse{
+		MsgType: "stream",
+		Stream: StreamResponseData{
+			ID:      streamID,
+			Finish:  finish,
+			Content: content,
+		},
+	}
+
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal stream response: %w", err)
+	}
+
+	log.Printf("Sending stream response: stream_id=%s, finish=%v", streamID, finish)
+	return h.crypto.EncryptMsg(string(streamJSON), nonce, timestamp)
+}
+
+func (h *Handler) createImageStreamResponse(streamID string, imageData []byte, finish bool, nonce, timestamp string) (string, error) {
+	imageMD5 := md5.Sum(imageData)
+	imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+
+	stream := StreamResponse{
+		MsgType: "stream",
+		Stream: StreamResponseData{
+			ID:     streamID,
+			Finish: finish,
+			MsgItem: []StreamMsgItem{
+				{
+					MsgType: "image",
+					Image: &ImageMsgItem{
+						Base64: imageBase64,
+						MD5:    hex.EncodeToString(imageMD5[:]),
+					},
+				},
+			},
+		},
+	}
+
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal image stream response: %w", err)
+	}
+
+	log.Printf("Sending image stream response: stream_id=%s", streamID)
+	return h.crypto.EncryptMsg(string(streamJSON), nonce, timestamp)
+}
+
+func (h *Handler) createErrorResponse(streamID, errorMsg string, nonce, timestamp string) (string, error) {
+	return h.createTextStreamResponse(streamID, errorMsg, true, nonce, timestamp)
+}
+
+func generateStreamID() string {
+	return fmt.Sprintf("stream_%d", time.Now().UnixNano())
 }
 
 func (h *Handler) ReceiveWebhook(c *gin.Context) {
@@ -278,7 +599,7 @@ func (h *Handler) sendWebhookMessage(webhookURL, content string) error {
 	}
 
 	client := &http.Client{}
-	resp, err := client.Post(webhookURL, "application/json", bytes.NewBuffer(bodyBytes))
+	resp, err := client.Post(webhookURL, "application/json", strings.NewReader(string(bodyBytes)))
 	if err != nil {
 		return fmt.Errorf("failed to send webhook message: %w", err)
 	}

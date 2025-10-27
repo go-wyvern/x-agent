@@ -1,5 +1,6 @@
 package wechat
 
 type Config struct {
-	WebhookKey string `json:"webhook_key"`
+	Token          string `json:"token"`
+	EncodingAESKey string `json:"encoding_aes_key"`
 }
