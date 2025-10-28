@@ -48,18 +48,34 @@ func NewHandler(
 }
 
 func (h *Handler) HandleCallback(c *gin.Context) {
+	if c.Request.Method == "GET" {
+		h.verifyURL(c)
+		return
+	}
+
 	h.handleMessage(c)
 }
 
-func (h *Handler) handleMessage(c *gin.Context) {
-	if c.Request.Method == "GET" {
-		echoStr := c.Query("echostr")
-		if echoStr != "" {
-			c.String(http.StatusOK, echoStr)
-			return
-		}
+func (h *Handler) verifyURL(c *gin.Context) {
+	msgSignature := c.Query("msg_signature")
+	timestamp := c.Query("timestamp")
+	nonce := c.Query("nonce")
+	echoStr := c.Query("echostr")
+
+	log.Printf("Verifying URL: msg_signature=%s, timestamp=%s, nonce=%s", msgSignature, timestamp, nonce)
+
+	decrypted, err := h.crypto.VerifyURL(msgSignature, timestamp, nonce, echoStr)
+	if err != nil {
+		log.Printf("Failed to verify URL: %v", err)
+		c.String(http.StatusBadRequest, "verify fail")
+		return
 	}
 
+	log.Printf("URL verification successful: %s", decrypted)
+	c.String(http.StatusOK, decrypted)
+}
+
+func (h *Handler) handleMessage(c *gin.Context) {
 	msgSignature := c.Query("msg_signature")
 	timestamp := c.Query("timestamp")
 	nonce := c.Query("nonce")
