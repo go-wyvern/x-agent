@@ -227,8 +227,6 @@ func (h *Handler) handleText(msg *IncomingMessage, nonce, timestamp string) (str
 		SessionID: sessionID,
 		UserID:    userID,
 		Question:  content,
-		Step:      0,
-		MaxSteps:  10,
 	})
 
 	if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
@@ -307,8 +305,6 @@ func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (st
 		SessionID: sessionID,
 		UserID:    userID,
 		Question:  "[Image uploaded]",
-		Step:      0,
-		MaxSteps:  10,
 	})
 
 	go func() {
@@ -383,8 +379,6 @@ func (h *Handler) handleMix(msg *IncomingMessage, nonce, timestamp string) (stri
 		SessionID: sessionID,
 		UserID:    userID,
 		Question:  "[Mixed content uploaded]",
-		Step:      0,
-		MaxSteps:  10,
 	})
 
 	go func() {
