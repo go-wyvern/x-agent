@@ -291,10 +291,6 @@ func (h *Handler) handleStream(msg *IncomingMessage, nonce, timestamp string) (s
 		return h.createTextStreamResponse(streamID, fmt.Sprintf("处理出错: %s", data.Error), true, nonce, timestamp)
 	}
 
-	if data.Finish && data.Response != "" {
-		return h.createTextStreamResponse(streamID, data.Response, true, nonce, timestamp)
-	}
-
 	if data.Response != "" {
 		return h.createTextStreamResponse(streamID, data.Response, data.Finish, nonce, timestamp)
 	}
