@@ -258,38 +258,16 @@ func (h *Handler) handleText(msg *IncomingMessage, nonce, timestamp string) (str
 		responseStream, err := container.Prompt(content)
 		if err != nil {
 			log.Printf("Failed to execute prompt: %v", err)
-			h.streamStore.SetStreamError(streamID, err.Error())
-			h.streamStore.SetStreamFinish(streamID, true)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
-		defer responseStream.Close()
 
-		buf := make([]byte, 4096)
-		var fullResponse strings.Builder
-
-		for {
-			n, err := responseStream.Read(buf)
-			if n > 0 {
-				chunk := string(buf[:n])
-				fullResponse.WriteString(chunk)
-				h.streamStore.AppendStreamResponse(streamID, chunk)
-			}
-
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading response: %v", err)
-					h.streamStore.SetStreamError(streamID, err.Error())
-				}
-				break
-			}
-		}
-
-		assistantResponse := fullResponse.String()
-		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
-			log.Printf("Failed to save assistant message: %v", err)
-		}
-
-		h.streamStore.SetStreamFinish(streamID, true)
+		h.processResponseStream(streamID, sessionID, responseStream)
 	}()
 
 	return h.createStreamIDResponse(streamID, nonce, timestamp)
@@ -309,15 +287,19 @@ func (h *Handler) handleStream(msg *IncomingMessage, nonce, timestamp string) (s
 		return h.createTextStreamResponse(streamID, "任务不存在或已过期", true, nonce, timestamp)
 	}
 
-	errMsg := h.streamStore.GetStreamError(streamID)
-	if errMsg != "" {
-		return h.createTextStreamResponse(streamID, fmt.Sprintf("处理出错: %s", errMsg), true, nonce, timestamp)
+	if data.Error != "" {
+		return h.createTextStreamResponse(streamID, fmt.Sprintf("处理出错: %s", data.Error), true, nonce, timestamp)
 	}
 
-	response := h.streamStore.GetStreamResponse(streamID)
-	finish := h.streamStore.GetStreamFinish(streamID)
+	if data.Finish && data.Response != "" {
+		return h.createTextStreamResponse(streamID, data.Response, true, nonce, timestamp)
+	}
 
-	return h.createTextStreamResponse(streamID, response, finish, nonce, timestamp)
+	if data.Response != "" {
+		return h.createTextStreamResponse(streamID, data.Response, data.Finish, nonce, timestamp)
+	}
+
+	return h.createTextStreamResponse(streamID, "正在处理您的问题...", false, nonce, timestamp)
 }
 
 func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
@@ -363,7 +345,12 @@ func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (st
 		imageData, err := h.downloadAndDecryptImage(msg.Image.URL)
 		if err != nil {
 			log.Printf("Failed to process image: %v", err)
-			h.streamStore.SetStreamError(streamID, "图片处理失败")
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "图片处理失败"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
 
@@ -377,45 +364,28 @@ func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (st
 		container, err := h.containerManager.GetContainer(sessionID)
 		if err != nil {
 			log.Printf("Failed to get container: %v", err)
-			h.streamStore.SetStreamError(streamID, "容器未找到")
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "容器未找到"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
 
 		responseStream, err := container.Prompt("Please describe this image")
 		if err != nil {
 			log.Printf("Failed to execute prompt: %v", err)
-			h.streamStore.SetStreamError(streamID, err.Error())
-			h.streamStore.SetStreamFinish(streamID, true)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
-		defer responseStream.Close()
 
-		buf := make([]byte, 4096)
-		var fullResponse strings.Builder
-
-		for {
-			n, err := responseStream.Read(buf)
-			if n > 0 {
-				chunk := string(buf[:n])
-				fullResponse.WriteString(chunk)
-				h.streamStore.AppendStreamResponse(streamID, chunk)
-			}
-
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading response: %v", err)
-					h.streamStore.SetStreamError(streamID, err.Error())
-				}
-				break
-			}
-		}
-
-		assistantResponse := fullResponse.String()
-		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
-			log.Printf("Failed to save assistant message: %v", err)
-		}
-
-		h.streamStore.SetStreamFinish(streamID, true)
+		h.processResponseStream(streamID, sessionID, responseStream)
 	}()
 
 	return h.createStreamIDResponse(streamID, nonce, timestamp)
@@ -489,45 +459,28 @@ func (h *Handler) handleMix(msg *IncomingMessage, nonce, timestamp string) (stri
 		container, err := h.containerManager.GetContainer(sessionID)
 		if err != nil {
 			log.Printf("Failed to get container: %v", err)
-			h.streamStore.SetStreamError(streamID, "容器未找到")
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "容器未找到"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
 
 		responseStream, err := container.Prompt(content)
 		if err != nil {
 			log.Printf("Failed to execute prompt: %v", err)
-			h.streamStore.SetStreamError(streamID, err.Error())
-			h.streamStore.SetStreamFinish(streamID, true)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
-		defer responseStream.Close()
 
-		buf := make([]byte, 4096)
-		var fullResponse strings.Builder
-
-		for {
-			n, err := responseStream.Read(buf)
-			if n > 0 {
-				chunk := string(buf[:n])
-				fullResponse.WriteString(chunk)
-				h.streamStore.AppendStreamResponse(streamID, chunk)
-			}
-
-			if err != nil {
-				if err != io.EOF {
-					log.Printf("Error reading response: %v", err)
-					h.streamStore.SetStreamError(streamID, err.Error())
-				}
-				break
-			}
-		}
-
-		assistantResponse := fullResponse.String()
-		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
-			log.Printf("Failed to save assistant message: %v", err)
-		}
-
-		h.streamStore.SetStreamFinish(streamID, true)
+		h.processResponseStream(streamID, sessionID, responseStream)
 	}()
 
 	return h.createStreamIDResponse(streamID, nonce, timestamp)
@@ -637,18 +590,65 @@ func (h *Handler) createErrorResponse(streamID, errorMsg string, nonce, timestam
 	return h.createTextStreamResponse(streamID, errorMsg, true, nonce, timestamp)
 }
 
+func (h *Handler) processResponseStream(streamID string, sessionID string, responseStream io.ReadCloser) {
+	defer responseStream.Close()
+
+	buf := make([]byte, 4096)
+	var fullResponse strings.Builder
+
+	for {
+		n, err := responseStream.Read(buf)
+		if n > 0 {
+			chunk := string(buf[:n])
+			fullResponse.WriteString(chunk)
+			
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Response = fullResponse.String()
+				data.Finish = false
+				h.streamStore.SetStreamData(streamID, data)
+			}
+		}
+
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("Error reading response: %v", err)
+				data := h.streamStore.GetStreamData(streamID)
+				if data != nil {
+					data.Error = err.Error()
+					data.Finish = true
+					h.streamStore.SetStreamData(streamID, data)
+				}
+			}
+			break
+		}
+	}
+
+	assistantResponse := fullResponse.String()
+	if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
+		log.Printf("Failed to save assistant message: %v", err)
+	}
+
+	data := h.streamStore.GetStreamData(streamID)
+	if data != nil {
+		data.Response = assistantResponse
+		data.Finish = true
+		h.streamStore.SetStreamData(streamID, data)
+	}
+}
+
 func generateStreamID() string {
 	return fmt.Sprintf("stream_%d", time.Now().UnixNano())
 }
 
 func (h *Handler) getSessionKey(msg *IncomingMessage) string {
-	chatType := msg.ChatType
-	chatID := msg.ChatID
-	userID := msg.From.UserID
-
-	if chatType == "single" || chatID == "" {
-		return userID
+	if msg.ChatID != "" {
+		return fmt.Sprintf("chat:%s", msg.ChatID)
 	}
 
-	return chatID + ":" + userID
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "user_default"
+	}
+	return fmt.Sprintf("user:%s", userID)
 }
