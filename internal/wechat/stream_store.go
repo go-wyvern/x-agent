@@ -17,17 +17,13 @@ type StreamData struct {
 }
 
 type StreamStore struct {
-	mu        sync.RWMutex
-	streams   map[string]*StreamData
-	responses map[string]string
-	errors    map[string]string
+	mu      sync.RWMutex
+	streams map[string]*StreamData
 }
 
 func NewStreamStore() *StreamStore {
 	store := &StreamStore{
-		streams:   make(map[string]*StreamData),
-		responses: make(map[string]string),
-		errors:    make(map[string]string),
+		streams: make(map[string]*StreamData),
 	}
 	go store.cleanupExpiredStreams()
 	return store
@@ -55,36 +51,44 @@ func (s *StreamStore) DeleteStreamData(streamID string) {
 	defer s.mu.Unlock()
 
 	delete(s.streams, streamID)
-	delete(s.responses, streamID)
-	delete(s.errors, streamID)
 }
 
 func (s *StreamStore) SetStreamResponse(streamID, response string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.responses[streamID] = response
+	if data, exists := s.streams[streamID]; exists {
+		data.Response = response
+	}
 }
 
 func (s *StreamStore) GetStreamResponse(streamID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.responses[streamID]
+	if data, exists := s.streams[streamID]; exists {
+		return data.Response
+	}
+	return ""
 }
 
 func (s *StreamStore) SetStreamError(streamID, errMsg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.errors[streamID] = errMsg
+	if data, exists := s.streams[streamID]; exists {
+		data.Error = errMsg
+	}
 }
 
 func (s *StreamStore) GetStreamError(streamID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return s.errors[streamID]
+	if data, exists := s.streams[streamID]; exists {
+		return data.Error
+	}
+	return ""
 }
 
 func (s *StreamStore) cleanupExpiredStreams() {
@@ -97,8 +101,6 @@ func (s *StreamStore) cleanupExpiredStreams() {
 		for streamID, data := range s.streams {
 			if now.Sub(data.CreatedAt) > 30*time.Minute {
 				delete(s.streams, streamID)
-				delete(s.responses, streamID)
-				delete(s.errors, streamID)
 			}
 		}
 		s.mu.Unlock()

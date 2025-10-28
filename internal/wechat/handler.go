@@ -154,7 +154,7 @@ func (h *Handler) handleEnterChatEvent(msg *IncomingMessage, nonce, timestamp st
 	response := TextResponse{
 		MsgType: "text",
 		Text: &TextMsg{
-			Content: "您好有什么可以帮你的?\\n",
+			Content: "您好,有什么可以帮你的?\n",
 		},
 	}
 
@@ -194,15 +194,16 @@ func (h *Handler) handleText(msg *IncomingMessage, nonce, timestamp string) (str
 		userID = "user_default"
 	}
 
-	sessionID := h.userSessionStore.GetSession(userID)
+	sessionKey := h.getSessionKey(msg)
+	sessionID := h.userSessionStore.GetSession(sessionKey)
 	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
+		sess, err := h.sessionManager.CreateSession(sessionKey)
 		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
+			log.Printf("Failed to create session for %s: %v", sessionKey, err)
 			return "", fmt.Errorf("failed to create session: %w", err)
 		}
 		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
+		h.userSessionStore.SetSession(sessionKey, sessionID)
 
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
@@ -303,15 +304,16 @@ func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (st
 		userID = "user_default"
 	}
 
-	sessionID := h.userSessionStore.GetSession(userID)
+	sessionKey := h.getSessionKey(msg)
+	sessionID := h.userSessionStore.GetSession(sessionKey)
 	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
+		sess, err := h.sessionManager.CreateSession(sessionKey)
 		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
+			log.Printf("Failed to create session for %s: %v", sessionKey, err)
 			return "", fmt.Errorf("failed to create session: %w", err)
 		}
 		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
+		h.userSessionStore.SetSession(sessionKey, sessionID)
 
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
@@ -389,15 +391,16 @@ func (h *Handler) handleMix(msg *IncomingMessage, nonce, timestamp string) (stri
 		userID = "user_default"
 	}
 
-	sessionID := h.userSessionStore.GetSession(userID)
+	sessionKey := h.getSessionKey(msg)
+	sessionID := h.userSessionStore.GetSession(sessionKey)
 	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
+		sess, err := h.sessionManager.CreateSession(sessionKey)
 		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
+			log.Printf("Failed to create session for %s: %v", sessionKey, err)
 			return "", fmt.Errorf("failed to create session: %w", err)
 		}
 		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
+		h.userSessionStore.SetSession(sessionKey, sessionID)
 
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
@@ -579,4 +582,16 @@ func (h *Handler) createErrorResponse(streamID, errorMsg string, nonce, timestam
 
 func generateStreamID() string {
 	return fmt.Sprintf("stream_%d", time.Now().UnixNano())
+}
+
+func (h *Handler) getSessionKey(msg *IncomingMessage) string {
+	chatType := msg.ChatType
+	chatID := msg.ChatID
+	userID := msg.From.UserID
+
+	if chatType == "single" || chatID == "" {
+		return userID
+	}
+
+	return chatID + ":" + userID
 }
