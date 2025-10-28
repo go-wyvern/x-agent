@@ -52,63 +52,6 @@ func (s *StreamStore) DeleteStreamData(streamID string) {
 	delete(s.streams, streamID)
 }
 
-func (s *StreamStore) GetStreamResponse(streamID string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		return data.Response
-	}
-	return ""
-}
-
-func (s *StreamStore) SetStreamError(streamID, errMsg string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		data.Error = errMsg
-	}
-}
-
-func (s *StreamStore) GetStreamError(streamID string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		return data.Error
-	}
-	return ""
-}
-
-func (s *StreamStore) AppendStreamResponse(streamID, chunk string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		data.Response += chunk
-	}
-}
-
-func (s *StreamStore) SetStreamFinish(streamID string, finish bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		data.Finish = finish
-	}
-}
-
-func (s *StreamStore) GetStreamFinish(streamID string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		return data.Finish
-	}
-	return false
-}
-
 func (s *StreamStore) cleanupExpiredStreams() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
