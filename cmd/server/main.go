@@ -76,6 +76,7 @@ func main() {
 		if err != nil {
 			log.Printf("Failed to create wechat handler: %v", err)
 		} else {
+			r.GET("/api/wechat/callback", wechatHandler.HandleCallback)
 			r.POST("/api/wechat/callback", wechatHandler.HandleCallback)
 			log.Println("WeChat Work Smart Robot integration enabled")
 		}
