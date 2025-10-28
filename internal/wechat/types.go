@@ -5,18 +5,18 @@ type EncryptedRequest struct {
 }
 
 type IncomingMessage struct {
-	MsgID      string      `json:"msgid"`
-	CreateTime int64       `json:"create_time,omitempty"`
-	AIBotID    string      `json:"aibotid"`
-	ChatID     string      `json:"chatid,omitempty"`
-	ChatType   string      `json:"chattype,omitempty"`
-	From       *FromInfo   `json:"from,omitempty"`
-	MsgType    string      `json:"msgtype"`
-	Text       *TextMsg    `json:"text,omitempty"`
-	Image      *ImageMsg   `json:"image,omitempty"`
-	Stream     *StreamMsg  `json:"stream,omitempty"`
-	Event      *EventMsg   `json:"event,omitempty"`
-	Mixed      *MixedMsg   `json:"mixed,omitempty"`
+	MsgID      string     `json:"msgid"`
+	CreateTime int64      `json:"create_time,omitempty"`
+	AIBotID    string     `json:"aibotid"`
+	ChatID     string     `json:"chatid,omitempty"`
+	ChatType   string     `json:"chattype,omitempty"`
+	From       *FromInfo  `json:"from,omitempty"`
+	MsgType    string     `json:"msgtype"`
+	Text       *TextMsg   `json:"text,omitempty"`
+	Image      *ImageMsg  `json:"image,omitempty"`
+	Stream     *StreamMsg `json:"stream,omitempty"`
+	Event      *EventMsg  `json:"event,omitempty"`
+	Mixed      *MixedMsg  `json:"mixed,omitempty"`
 }
 
 type TextMsg struct {
@@ -92,9 +92,9 @@ type StreamResponseData struct {
 }
 
 type StreamMsgItem struct {
-	MsgType string           `json:"msgtype"`
-	Text    *TextMsg         `json:"text,omitempty"`
-	Image   *ImageMsgItem    `json:"image,omitempty"`
+	MsgType string        `json:"msgtype"`
+	Text    *TextMsg      `json:"text,omitempty"`
+	Image   *ImageMsgItem `json:"image,omitempty"`
 }
 
 type ImageMsgItem struct {
