@@ -167,17 +167,17 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	log.Printf("Received text message: %s", content)
 
 	streamID := generateStreamID()
-	userID := "user_default"
+	botID := "bot_smart_robot"
 
-	sessionID := h.userSessionStore.GetSession(userID)
+	sessionID := h.userSessionStore.GetSession(botID)
 	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
+		sess, err := h.sessionManager.CreateSession(botID)
 		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
+			log.Printf("Failed to create session for %s: %v", botID, err)
 			return h.createErrorResponse(streamID, "创建会话失败", nonce, timestamp)
 		}
 		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
+		h.userSessionStore.SetSession(botID, sessionID)
 
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
@@ -188,8 +188,9 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
 		SessionID: sessionID,
-		UserID:    userID,
+		UserID:    botID,
 		Question:  content,
+		Answer:    "",
 		Step:      0,
 		MaxSteps:  10,
 	})
@@ -208,6 +209,12 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 		responseStream, err := container.Prompt(content)
 		if err != nil {
 			log.Printf("Failed to execute prompt: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Answer = fmt.Sprintf("处理失败: %v", err)
+				data.Step = data.MaxSteps
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
 		defer responseStream.Close()
@@ -215,12 +222,25 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 		responseBytes, err := io.ReadAll(responseStream)
 		if err != nil {
 			log.Printf("Failed to read response: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Answer = fmt.Sprintf("读取响应失败: %v", err)
+				data.Step = data.MaxSteps
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
 
 		assistantResponse := string(responseBytes)
 		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
 			log.Printf("Failed to save assistant message: %v", err)
+		}
+
+		data := h.streamStore.GetStreamData(streamID)
+		if data != nil {
+			data.Answer = assistantResponse
+			data.Step = data.MaxSteps
+			h.streamStore.SetStreamData(streamID, data)
 		}
 	}()
 
@@ -242,16 +262,16 @@ func (h *Handler) handleStreamMessage(msg *IncomingMessage, nonce, timestamp str
 		return h.createTextStreamResponse(streamID, "任务不存在或已过期", true, nonce, timestamp)
 	}
 
-	data.Step++
-	h.streamStore.SetStreamData(streamID, data)
-
-	answer := fmt.Sprintf("收到问题：%s\n", data.Question)
-	for i := 0; i < data.Step; i++ {
-		answer += fmt.Sprintf("处理步骤 %d: 已完成\n", i)
+	if data.Answer == "" {
+		data.Step++
+		h.streamStore.SetStreamData(streamID, data)
+		answer := fmt.Sprintf("正在处理问题：%s\n处理步骤 %d/%d", data.Question, data.Step, data.MaxSteps)
+		return h.createTextStreamResponse(streamID, answer, false, nonce, timestamp)
 	}
 
-	finish := data.Step >= data.MaxSteps
-	return h.createTextStreamResponse(streamID, answer, finish, nonce, timestamp)
+	finish := true
+	h.streamStore.DeleteStreamData(streamID)
+	return h.createTextStreamResponse(streamID, data.Answer, finish, nonce, timestamp)
 }
 
 func (h *Handler) handleImageMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
