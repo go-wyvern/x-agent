@@ -118,7 +118,7 @@ func (h *Handler) handleMessage(c *gin.Context) {
 		return
 	}
 
-	response, err := h.processMessage(&msg, nonce, timestamp)
+	response, err := h.processMessage(c, &msg, nonce, timestamp)
 	if err != nil {
 		log.Printf("Failed to process message: %v", err)
 		c.String(http.StatusOK, "success")
@@ -133,7 +133,7 @@ func (h *Handler) handleMessage(c *gin.Context) {
 	}
 }
 
-func (h *Handler) processMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+func (h *Handler) processMessage(c *gin.Context, msg *IncomingMessage, nonce, timestamp string) (string, error) {
 	if msg.MsgType == "" {
 		log.Printf("Unknown message type: %+v", msg)
 		return "", nil
@@ -141,7 +141,7 @@ func (h *Handler) processMessage(msg *IncomingMessage, nonce, timestamp string) 
 
 	switch msg.MsgType {
 	case "text":
-		return h.handleTextMessage(msg, nonce, timestamp)
+		return h.handleTextMessage(c, msg, nonce, timestamp)
 	case "stream":
 		return h.handleStreamMessage(msg, nonce, timestamp)
 	case "image":
@@ -158,7 +158,7 @@ func (h *Handler) processMessage(msg *IncomingMessage, nonce, timestamp string) 
 	}
 }
 
-func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+func (h *Handler) handleTextMessage(c *gin.Context, msg *IncomingMessage, nonce, timestamp string) (string, error) {
 	if msg.Text == nil {
 		return "", fmt.Errorf("text message has no content")
 	}
@@ -167,7 +167,11 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	log.Printf("Received text message: %s", content)
 
 	streamID := generateStreamID()
-	userID := "user_default"
+	botID := c.Param("botid")
+	if botID == "" {
+		botID = "default"
+	}
+	userID := fmt.Sprintf("bot_%s", botID)
 
 	sessionID := h.userSessionStore.GetSession(userID)
 	if sessionID == "" {
