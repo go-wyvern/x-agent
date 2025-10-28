@@ -218,22 +218,9 @@ func (h *Handler) handleText(msg *IncomingMessage, nonce, timestamp string) (str
 		userID = "user_default"
 	}
 
-	sessionKey := h.getSessionKey(msg)
-	sessionID := h.userSessionStore.GetSession(sessionKey)
-	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(sessionKey)
-		if err != nil {
-			log.Printf("Failed to create session for %s: %v", sessionKey, err)
-			return "", fmt.Errorf("failed to create session: %w", err)
-		}
-		sessionID = sess.ID
-		h.userSessionStore.SetSession(sessionKey, sessionID)
-
-		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
-		if err != nil {
-			log.Printf("Failed to create container for session %s: %v", sessionID, err)
-			return "", fmt.Errorf("failed to create container: %w", err)
-		}
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
 	}
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
@@ -311,22 +298,9 @@ func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (st
 		userID = "user_default"
 	}
 
-	sessionKey := h.getSessionKey(msg)
-	sessionID := h.userSessionStore.GetSession(sessionKey)
-	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(sessionKey)
-		if err != nil {
-			log.Printf("Failed to create session for %s: %v", sessionKey, err)
-			return "", fmt.Errorf("failed to create session: %w", err)
-		}
-		sessionID = sess.ID
-		h.userSessionStore.SetSession(sessionKey, sessionID)
-
-		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
-		if err != nil {
-			log.Printf("Failed to create container for session %s: %v", sessionID, err)
-			return "", fmt.Errorf("failed to create container: %w", err)
-		}
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
 	}
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
@@ -400,22 +374,9 @@ func (h *Handler) handleMix(msg *IncomingMessage, nonce, timestamp string) (stri
 		userID = "user_default"
 	}
 
-	sessionKey := h.getSessionKey(msg)
-	sessionID := h.userSessionStore.GetSession(sessionKey)
-	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(sessionKey)
-		if err != nil {
-			log.Printf("Failed to create session for %s: %v", sessionKey, err)
-			return "", fmt.Errorf("failed to create session: %w", err)
-		}
-		sessionID = sess.ID
-		h.userSessionStore.SetSession(sessionKey, sessionID)
-
-		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
-		if err != nil {
-			log.Printf("Failed to create container for session %s: %v", sessionID, err)
-			return "", fmt.Errorf("failed to create container: %w", err)
-		}
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
 	}
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
@@ -647,4 +608,25 @@ func (h *Handler) getSessionKey(msg *IncomingMessage) string {
 		userID = "user_default"
 	}
 	return fmt.Sprintf("user:%s", userID)
+}
+
+func (h *Handler) getOrCreateSession(msg *IncomingMessage) (string, error) {
+	sessionKey := h.getSessionKey(msg)
+	sessionID := h.userSessionStore.GetSession(sessionKey)
+	if sessionID == "" {
+		sess, err := h.sessionManager.CreateSession(sessionKey)
+		if err != nil {
+			log.Printf("Failed to create session for %s: %v", sessionKey, err)
+			return "", fmt.Errorf("failed to create session: %w", err)
+		}
+		sessionID = sess.ID
+		h.userSessionStore.SetSession(sessionKey, sessionID)
+
+		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
+		if err != nil {
+			log.Printf("Failed to create container for session %s: %v", sessionID, err)
+			return "", fmt.Errorf("failed to create container: %w", err)
+		}
+	}
+	return sessionID, nil
 }
