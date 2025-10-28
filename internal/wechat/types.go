@@ -5,12 +5,18 @@ type EncryptedRequest struct {
 }
 
 type IncomingMessage struct {
-	MsgType string      `json:"msgtype"`
-	Text    *TextMsg    `json:"text,omitempty"`
-	Image   *ImageMsg   `json:"image,omitempty"`
-	Stream  *StreamMsg  `json:"stream,omitempty"`
-	Event   *EventMsg   `json:"event,omitempty"`
-	Mixed   interface{} `json:"mixed,omitempty"`
+	MsgID      string      `json:"msgid"`
+	CreateTime int64       `json:"create_time,omitempty"`
+	AIBotID    string      `json:"aibotid"`
+	ChatID     string      `json:"chatid,omitempty"`
+	ChatType   string      `json:"chattype,omitempty"`
+	From       *FromInfo   `json:"from,omitempty"`
+	MsgType    string      `json:"msgtype"`
+	Text       *TextMsg    `json:"text,omitempty"`
+	Image      *ImageMsg   `json:"image,omitempty"`
+	Stream     *StreamMsg  `json:"stream,omitempty"`
+	Event      *EventMsg   `json:"event,omitempty"`
+	Mixed      *MixedMsg   `json:"mixed,omitempty"`
 }
 
 type TextMsg struct {
@@ -28,8 +34,49 @@ type StreamMsg struct {
 	Finish bool   `json:"finish,omitempty"`
 }
 
+type FromInfo struct {
+	CorpID string `json:"corpid,omitempty"`
+	UserID string `json:"userid"`
+}
+
 type EventMsg struct {
-	EventType string `json:"event_type"`
+	EventType         string                 `json:"eventtype"`
+	TemplateCardEvent *TemplateCardEventData `json:"template_card_event,omitempty"`
+}
+
+type TemplateCardEventData struct {
+	CardType      string         `json:"card_type"`
+	EventKey      string         `json:"event_key"`
+	TaskID        string         `json:"task_id"`
+	SelectedItems *SelectedItems `json:"selected_items,omitempty"`
+}
+
+type SelectedItems struct {
+	SelectedItem []SelectedItem `json:"selected_item"`
+}
+
+type SelectedItem struct {
+	QuestionKey string    `json:"question_key"`
+	OptionIDs   *OptionID `json:"option_ids"`
+}
+
+type OptionID struct {
+	OptionID []string `json:"option_id"`
+}
+
+type MixedMsg struct {
+	MsgItem []MixedMsgItem `json:"msg_item"`
+}
+
+type MixedMsgItem struct {
+	MsgType string    `json:"msgtype"`
+	Text    *TextMsg  `json:"text,omitempty"`
+	Image   *ImageMsg `json:"image,omitempty"`
+}
+
+type TextResponse struct {
+	MsgType string   `json:"msgtype"`
+	Text    *TextMsg `json:"text"`
 }
 
 type StreamResponse struct {

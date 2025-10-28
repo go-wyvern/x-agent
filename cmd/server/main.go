@@ -70,18 +70,13 @@ func main() {
 		c.Next()
 	})
 
-	r.POST("/v1/chat/completions", chatHandler.HandleChatCompletion)
-	r.GET("/v1/sessions/:id", chatHandler.HandleGetSession)
-	r.DELETE("/v1/sessions/:id", chatHandler.HandleDeleteSession)
-
 	wechatConfig := loadWechatConfig()
 	if wechatConfig != nil {
 		wechatHandler, err := wechat.NewHandler(wechatConfig, sessionManager, containerManager)
 		if err != nil {
 			log.Printf("Failed to create wechat handler: %v", err)
 		} else {
-			r.POST("/api/wechat/webhook", wechatHandler.ReceiveWebhook)
-			r.Any("/api/wechat/callback/:botid", wechatHandler.HandleCallback)
+			r.POST("/api/wechat/callback", wechatHandler.HandleCallback)
 			log.Println("WeChat Work Smart Robot integration enabled")
 		}
 	}
