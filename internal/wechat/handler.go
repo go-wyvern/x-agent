@@ -140,25 +140,71 @@ func (h *Handler) processMessage(msg *IncomingMessage, nonce, timestamp string) 
 	}
 
 	switch msg.MsgType {
-	case "text":
-		return h.handleTextMessage(msg, nonce, timestamp)
-	case "stream":
-		return h.handleStreamMessage(msg, nonce, timestamp)
-	case "image":
-		return h.handleImageMessage(msg, nonce, timestamp)
-	case "mixed":
-		log.Printf("Mixed message type not yet supported")
-		return "", nil
 	case "event":
-		log.Printf("Event message: %+v", msg.Event)
-		return "", nil
+		return h.handleEvent(msg, nonce, timestamp)
+	case "text":
+		return h.handleText(msg, nonce, timestamp)
+	case "stream":
+		return h.handleStream(msg, nonce, timestamp)
+	case "image":
+		return h.handleImage(msg, nonce, timestamp)
+	case "mixed":
+		return h.handleMix(msg, nonce, timestamp)
 	default:
 		log.Printf("Unsupported message type: %s", msg.MsgType)
 		return "", nil
 	}
 }
 
-func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+func (h *Handler) handleEvent(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Event == nil {
+		return "", fmt.Errorf("event message has no event data")
+	}
+
+	log.Printf("Received event: %s", msg.Event.EventType)
+
+	switch msg.Event.EventType {
+	case "enter_chat":
+		return h.handleEnterChatEvent(msg, nonce, timestamp)
+	case "template_card_event":
+		return h.handleTemplateCardEvent(msg, nonce, timestamp)
+	default:
+		log.Printf("Unsupported event type: %s", msg.Event.EventType)
+		return "", nil
+	}
+}
+
+func (h *Handler) handleEnterChatEvent(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	response := TextResponse{
+		MsgType: "text",
+		Text: &TextMsg{
+			Content: "您好,有什么可以帮你的?\n",
+		},
+	}
+
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal text response: %w", err)
+	}
+
+	log.Printf("Sending enter_chat response")
+	return h.crypto.EncryptMsg(string(responseJSON), nonce, timestamp)
+}
+
+func (h *Handler) handleTemplateCardEvent(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Event.TemplateCardEvent == nil {
+		return "", fmt.Errorf("template card event has no event data")
+	}
+
+	log.Printf("Template card event: card_type=%s, event_key=%s, task_id=%s",
+		msg.Event.TemplateCardEvent.CardType,
+		msg.Event.TemplateCardEvent.EventKey,
+		msg.Event.TemplateCardEvent.TaskID)
+
+	return "", nil
+}
+
+func (h *Handler) handleText(msg *IncomingMessage, nonce, timestamp string) (string, error) {
 	if msg.Text == nil {
 		return "", fmt.Errorf("text message has no content")
 	}
@@ -167,31 +213,20 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	log.Printf("Received text message: %s", content)
 
 	streamID := generateStreamID()
-	userID := "user_default"
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "user_default"
+	}
 
-	sessionID := h.userSessionStore.GetSession(userID)
-	if sessionID == "" {
-		sess, err := h.sessionManager.CreateSession(userID)
-		if err != nil {
-			log.Printf("Failed to create session for %s: %v", userID, err)
-			return h.createErrorResponse(streamID, "创建会话失败", nonce, timestamp)
-		}
-		sessionID = sess.ID
-		h.userSessionStore.SetSession(userID, sessionID)
-
-		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
-		if err != nil {
-			log.Printf("Failed to create container for session %s: %v", sessionID, err)
-			return h.createErrorResponse(streamID, "创建容器失败", nonce, timestamp)
-		}
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
 	}
 
 	h.streamStore.SetStreamData(streamID, &StreamData{
 		SessionID: sessionID,
 		UserID:    userID,
 		Question:  content,
-		Step:      0,
-		MaxSteps:  10,
 	})
 
 	if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
@@ -201,40 +236,35 @@ func (h *Handler) handleTextMessage(msg *IncomingMessage, nonce, timestamp strin
 	container, err := h.containerManager.GetContainer(sessionID)
 	if err != nil {
 		log.Printf("Failed to get container: %v", err)
-		return h.createErrorResponse(streamID, "容器未找到", nonce, timestamp)
+		return "", fmt.Errorf("failed to get container: %w", err)
 	}
 
 	go func() {
 		responseStream, err := container.Prompt(content)
 		if err != nil {
 			log.Printf("Failed to execute prompt: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
 			return
 		}
-		defer responseStream.Close()
 
-		responseBytes, err := io.ReadAll(responseStream)
-		if err != nil {
-			log.Printf("Failed to read response: %v", err)
-			return
-		}
-
-		assistantResponse := string(responseBytes)
-		if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
-			log.Printf("Failed to save assistant message: %v", err)
-		}
+		h.processResponseStream(streamID, sessionID, responseStream)
 	}()
 
-	answer := fmt.Sprintf("收到问题：%s\n处理步骤 0: 已完成\n", content)
-	return h.createTextStreamResponse(streamID, answer, false, nonce, timestamp)
+	return h.createStreamIDResponse(streamID, nonce, timestamp)
 }
 
-func (h *Handler) handleStreamMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+func (h *Handler) handleStream(msg *IncomingMessage, nonce, timestamp string) (string, error) {
 	if msg.Stream == nil {
 		return "", fmt.Errorf("stream message has no stream data")
 	}
 
 	streamID := msg.Stream.ID
-	log.Printf("Received stream request for ID: %s", streamID)
+	log.Printf("Received stream refresh request for ID: %s", streamID)
 
 	data := h.streamStore.GetStreamData(streamID)
 	if data == nil {
@@ -242,34 +272,169 @@ func (h *Handler) handleStreamMessage(msg *IncomingMessage, nonce, timestamp str
 		return h.createTextStreamResponse(streamID, "任务不存在或已过期", true, nonce, timestamp)
 	}
 
-	data.Step++
-	h.streamStore.SetStreamData(streamID, data)
-
-	answer := fmt.Sprintf("收到问题：%s\n", data.Question)
-	for i := 0; i < data.Step; i++ {
-		answer += fmt.Sprintf("处理步骤 %d: 已完成\n", i)
+	if data.Error != "" {
+		return h.createTextStreamResponse(streamID, fmt.Sprintf("处理出错: %s", data.Error), true, nonce, timestamp)
 	}
 
-	finish := data.Step >= data.MaxSteps
-	return h.createTextStreamResponse(streamID, answer, finish, nonce, timestamp)
+	if data.Response != "" {
+		return h.createTextStreamResponse(streamID, data.Response, data.Finish, nonce, timestamp)
+	}
+
+	return h.createTextStreamResponse(streamID, "正在处理您的问题...", false, nonce, timestamp)
 }
 
-func (h *Handler) handleImageMessage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+func (h *Handler) handleImage(msg *IncomingMessage, nonce, timestamp string) (string, error) {
 	if msg.Image == nil {
 		return "", fmt.Errorf("image message has no image data")
 	}
 
 	log.Printf("Received image message: %s", msg.Image.URL)
 
-	imageData, err := h.downloadAndDecryptImage(msg.Image.URL)
-	if err != nil {
-		log.Printf("Failed to process image: %v", err)
-		streamID := generateStreamID()
-		return h.createErrorResponse(streamID, "图片处理失败", nonce, timestamp)
+	streamID := generateStreamID()
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "user_default"
 	}
 
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
+	}
+
+	h.streamStore.SetStreamData(streamID, &StreamData{
+		SessionID: sessionID,
+		UserID:    userID,
+		Question:  "[Image uploaded]",
+	})
+
+	go func() {
+		imageData, err := h.downloadAndDecryptImage(msg.Image.URL)
+		if err != nil {
+			log.Printf("Failed to process image: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "图片处理失败"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
+			return
+		}
+
+		imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+		content := fmt.Sprintf("User uploaded an image (base64): %s", imageBase64)
+
+		if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
+			log.Printf("Failed to save user message: %v", err)
+		}
+
+		container, err := h.containerManager.GetContainer(sessionID)
+		if err != nil {
+			log.Printf("Failed to get container: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "容器未找到"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
+			return
+		}
+
+		responseStream, err := container.Prompt("Please describe this image")
+		if err != nil {
+			log.Printf("Failed to execute prompt: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
+			return
+		}
+
+		h.processResponseStream(streamID, sessionID, responseStream)
+	}()
+
+	return h.createStreamIDResponse(streamID, nonce, timestamp)
+}
+
+func (h *Handler) handleMix(msg *IncomingMessage, nonce, timestamp string) (string, error) {
+	if msg.Mixed == nil {
+		return "", fmt.Errorf("mixed message has no mixed data")
+	}
+
+	log.Printf("Received mixed message with %d items", len(msg.Mixed.MsgItem))
+
 	streamID := generateStreamID()
-	return h.createImageStreamResponse(streamID, imageData, true, nonce, timestamp)
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "user_default"
+	}
+
+	sessionID, err := h.getOrCreateSession(msg)
+	if err != nil {
+		return "", err
+	}
+
+	h.streamStore.SetStreamData(streamID, &StreamData{
+		SessionID: sessionID,
+		UserID:    userID,
+		Question:  "[Mixed content uploaded]",
+	})
+
+	go func() {
+		var contentParts []string
+		for _, item := range msg.Mixed.MsgItem {
+			switch item.MsgType {
+			case "text":
+				if item.Text != nil {
+					contentParts = append(contentParts, item.Text.Content)
+				}
+			case "image":
+				if item.Image != nil {
+					imageData, err := h.downloadAndDecryptImage(item.Image.URL)
+					if err != nil {
+						log.Printf("Failed to process image in mixed message: %v", err)
+						continue
+					}
+					imageBase64 := base64.StdEncoding.EncodeToString(imageData)
+					contentParts = append(contentParts, fmt.Sprintf("[Image: %s]", imageBase64))
+				}
+			}
+		}
+
+		content := strings.Join(contentParts, "\n")
+		if err := h.sessionManager.AddMessage(sessionID, "user", content); err != nil {
+			log.Printf("Failed to save user message: %v", err)
+		}
+
+		container, err := h.containerManager.GetContainer(sessionID)
+		if err != nil {
+			log.Printf("Failed to get container: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = "容器未找到"
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
+			return
+		}
+
+		responseStream, err := container.Prompt(content)
+		if err != nil {
+			log.Printf("Failed to execute prompt: %v", err)
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Error = err.Error()
+				data.Finish = true
+				h.streamStore.SetStreamData(streamID, data)
+			}
+			return
+		}
+
+		h.processResponseStream(streamID, sessionID, responseStream)
+	}()
+
+	return h.createStreamIDResponse(streamID, nonce, timestamp)
 }
 
 func (h *Handler) downloadAndDecryptImage(imageURL string) ([]byte, error) {
@@ -304,6 +469,23 @@ func (h *Handler) decryptImageData(encryptedData []byte) ([]byte, error) {
 	iv := aesKey[:16]
 
 	return decryptAESCBC(encryptedData, aesKey, iv)
+}
+
+func (h *Handler) createStreamIDResponse(streamID, nonce, timestamp string) (string, error) {
+	stream := StreamResponse{
+		MsgType: "stream",
+		Stream: StreamResponseData{
+			ID: streamID,
+		},
+	}
+
+	streamJSON, err := json.Marshal(stream)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal stream ID response: %w", err)
+	}
+
+	log.Printf("Sending stream ID response: stream_id=%s", streamID)
+	return h.crypto.EncryptMsg(string(streamJSON), nonce, timestamp)
 }
 
 func (h *Handler) createTextStreamResponse(streamID, content string, finish bool, nonce, timestamp string) (string, error) {
@@ -359,70 +541,77 @@ func (h *Handler) createErrorResponse(streamID, errorMsg string, nonce, timestam
 	return h.createTextStreamResponse(streamID, errorMsg, true, nonce, timestamp)
 }
 
+func (h *Handler) processResponseStream(streamID string, sessionID string, responseStream io.ReadCloser) {
+	defer responseStream.Close()
+
+	buf := make([]byte, 4096)
+	var fullResponse strings.Builder
+
+	for {
+		n, err := responseStream.Read(buf)
+		if n > 0 {
+			chunk := string(buf[:n])
+			fullResponse.WriteString(chunk)
+			
+			data := h.streamStore.GetStreamData(streamID)
+			if data != nil {
+				data.Response = fullResponse.String()
+				data.Finish = false
+				h.streamStore.SetStreamData(streamID, data)
+			}
+		}
+
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("Error reading response: %v", err)
+				data := h.streamStore.GetStreamData(streamID)
+				if data != nil {
+					data.Error = err.Error()
+					data.Finish = true
+					h.streamStore.SetStreamData(streamID, data)
+				}
+			}
+			break
+		}
+	}
+
+	assistantResponse := fullResponse.String()
+	if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
+		log.Printf("Failed to save assistant message: %v", err)
+	}
+
+	data := h.streamStore.GetStreamData(streamID)
+	if data != nil {
+		data.Response = assistantResponse
+		data.Finish = true
+		h.streamStore.SetStreamData(streamID, data)
+	}
+}
+
 func generateStreamID() string {
 	return fmt.Sprintf("stream_%d", time.Now().UnixNano())
 }
 
-func (h *Handler) ReceiveWebhook(c *gin.Context) {
-	body, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		log.Printf("Failed to read request body: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
-		return
+func (h *Handler) getSessionKey(msg *IncomingMessage) string {
+	if msg.ChatID != "" {
+		return fmt.Sprintf("chat:%s", msg.ChatID)
 	}
 
-	var msg WebhookMessage
-	if err := json.Unmarshal(body, &msg); err != nil {
-		log.Printf("Failed to unmarshal message: %v", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json"})
-		return
+	userID := msg.From.UserID
+	if userID == "" {
+		userID = "user_default"
 	}
-
-	go h.processWebhookMessage(&msg)
-
-	c.JSON(http.StatusOK, gin.H{"code": 0})
+	return fmt.Sprintf("user:%s", userID)
 }
 
-func (h *Handler) processWebhookMessage(msg *WebhookMessage) {
-	if msg.MsgType != "text" {
-		log.Printf("Ignoring non-text message type: %s", msg.MsgType)
-		return
-	}
-
-	chatID := msg.ChatID
-	chatType := msg.ChatType
-	userID := msg.From.UserID
-	content := msg.Text.Content
-
-	isGroupChat := chatType == "group"
-
-	if isGroupChat {
-		if !h.isMentioned(content) {
-			log.Printf("Message in group %s does not mention bot, ignoring", chatID)
-			return
-		}
-		content = h.extractContent(content)
-	}
-
-	if strings.HasPrefix(content, "/") {
-		h.handleCommand(msg, content, isGroupChat)
-		return
-	}
-
-	h.sendWebhookMessage(msg.WebhookURL, "正在思考中...")
-
-	sessionKey := userID
-	if isGroupChat {
-		sessionKey = chatID
-	}
-
+func (h *Handler) getOrCreateSession(msg *IncomingMessage) (string, error) {
+	sessionKey := h.getSessionKey(msg)
 	sessionID := h.userSessionStore.GetSession(sessionKey)
 	if sessionID == "" {
 		sess, err := h.sessionManager.CreateSession(sessionKey)
 		if err != nil {
 			log.Printf("Failed to create session for %s: %v", sessionKey, err)
-			h.sendWebhookMessage(msg.WebhookURL, "抱歉，创建会话失败，请稍后重试")
-			return
+			return "", fmt.Errorf("failed to create session: %w", err)
 		}
 		sessionID = sess.ID
 		h.userSessionStore.SetSession(sessionKey, sessionID)
@@ -430,184 +619,8 @@ func (h *Handler) processWebhookMessage(msg *WebhookMessage) {
 		_, err = h.containerManager.CreateContainer(sessionID, "/workspace")
 		if err != nil {
 			log.Printf("Failed to create container for session %s: %v", sessionID, err)
-			h.sendWebhookMessage(msg.WebhookURL, "抱歉，创建容器失败，请稍后重试")
-			return
+			return "", fmt.Errorf("failed to create container: %w", err)
 		}
 	}
-
-	messageContent := content
-	if isGroupChat {
-		messageContent = fmt.Sprintf("[%s]: %s", msg.From.Name, content)
-	}
-
-	if err := h.sessionManager.AddMessage(sessionID, "user", messageContent); err != nil {
-		log.Printf("Failed to save user message: %v", err)
-	}
-
-	container, err := h.containerManager.GetContainer(sessionID)
-	if err != nil {
-		log.Printf("Failed to get container: %v", err)
-		h.sendWebhookMessage(msg.WebhookURL, "抱歉，容器未找到，请稍后重试")
-		return
-	}
-
-	responseStream, err := container.Prompt(content)
-	if err != nil {
-		log.Printf("Failed to execute prompt: %v", err)
-		h.sendWebhookMessage(msg.WebhookURL, "抱歉，处理消息时出错了，请稍后重试")
-		return
-	}
-	defer responseStream.Close()
-
-	responseBytes, err := io.ReadAll(responseStream)
-	if err != nil {
-		log.Printf("Failed to read response: %v", err)
-		h.sendWebhookMessage(msg.WebhookURL, "抱歉，读取响应失败，请稍后重试")
-		return
-	}
-
-	assistantResponse := string(responseBytes)
-
-	if err := h.sessionManager.AddMessage(sessionID, "assistant", assistantResponse); err != nil {
-		log.Printf("Failed to save assistant message: %v", err)
-	}
-
-	formattedResponse := FormatMarkdown(assistantResponse)
-	h.sendWebhookMessage(msg.WebhookURL, formattedResponse)
-}
-
-func (h *Handler) isMentioned(content string) bool {
-	mentions := []string{
-		"@x-agent",
-		"@X-Agent",
-		"@x-Agent",
-	}
-
-	for _, mention := range mentions {
-		if strings.Contains(content, mention) {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (h *Handler) extractContent(content string) string {
-	content = strings.ReplaceAll(content, "@x-agent", "")
-	content = strings.ReplaceAll(content, "@X-Agent", "")
-	content = strings.ReplaceAll(content, "@x-Agent", "")
-
-	content = strings.TrimSpace(content)
-
-	return content
-}
-
-func (h *Handler) handleCommand(msg *WebhookMessage, command string, isGroupChat bool) {
-	command = strings.TrimSpace(command)
-
-	sessionKey := msg.From.UserID
-	if isGroupChat {
-		sessionKey = msg.ChatID
-	}
-
-	switch {
-	case command == "/help":
-		helpText := `可用命令:
-/help - 显示帮助
-/new - 开始新对话
-/reset - 重置当前会话
-/status - 查看会话状态`
-		h.sendWebhookMessage(msg.WebhookURL, helpText)
-
-	case command == "/new":
-		oldSessionID := h.userSessionStore.GetSession(sessionKey)
-		if oldSessionID != "" {
-			if err := h.sessionManager.DeleteSession(oldSessionID); err != nil {
-				log.Printf("Failed to delete old session %s: %v", oldSessionID, err)
-			}
-		}
-
-		sess, err := h.sessionManager.CreateSession(sessionKey)
-		if err != nil {
-			h.sendWebhookMessage(msg.WebhookURL, "创建新会话失败，请稍后重试")
-			return
-		}
-
-		_, err = h.containerManager.CreateContainer(sess.ID, "/workspace")
-		if err != nil {
-			if err := h.sessionManager.DeleteSession(sess.ID); err != nil {
-				log.Printf("Failed to cleanup session %s: %v", sess.ID, err)
-			}
-			h.sendWebhookMessage(msg.WebhookURL, "创建容器失败，请稍后重试")
-			return
-		}
-
-		h.userSessionStore.SetSession(sessionKey, sess.ID)
-		h.sendWebhookMessage(msg.WebhookURL, fmt.Sprintf("已创建新会话: %s", sess.ID[:8]))
-
-	case command == "/reset":
-		sessionID := h.userSessionStore.GetSession(sessionKey)
-		if sessionID == "" {
-			h.sendWebhookMessage(msg.WebhookURL, "当前无活跃会话")
-			return
-		}
-
-		if err := h.sessionManager.DeleteSession(sessionID); err != nil {
-			log.Printf("Failed to delete session %s: %v", sessionID, err)
-		}
-		h.userSessionStore.ClearSession(sessionKey)
-		h.sendWebhookMessage(msg.WebhookURL, "会话已重置")
-
-	case command == "/status":
-		sessionID := h.userSessionStore.GetSession(sessionKey)
-		if sessionID == "" {
-			h.sendWebhookMessage(msg.WebhookURL, "当前无活跃会话")
-		} else {
-			sess, err := h.sessionManager.GetSession(sessionID)
-			if err != nil {
-				h.sendWebhookMessage(msg.WebhookURL, "无法获取会话信息")
-				return
-			}
-			statusText := fmt.Sprintf("会话 ID: %s\n消息数: %d\n创建时间: %s",
-				sessionID[:8],
-				len(sess.Messages),
-				sess.CreatedAt.Format("2006-01-02 15:04:05"),
-			)
-			h.sendWebhookMessage(msg.WebhookURL, statusText)
-		}
-
-	default:
-		h.sendWebhookMessage(msg.WebhookURL, "未知命令，输入 /help 查看帮助")
-	}
-}
-
-func (h *Handler) sendWebhookMessage(webhookURL, content string) error {
-	if webhookURL == "" {
-		return fmt.Errorf("webhook url is empty")
-	}
-
-	response := WebhookResponse{
-		MsgType: "text",
-		Text: WebhookTextContent{
-			Content: content,
-		},
-	}
-
-	bodyBytes, err := json.Marshal(response)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Post(webhookURL, "application/json", strings.NewReader(string(bodyBytes)))
-	if err != nil {
-		return fmt.Errorf("failed to send webhook message: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
-	}
-
-	return nil
+	return sessionID, nil
 }

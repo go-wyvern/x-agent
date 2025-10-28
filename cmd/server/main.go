@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 
-	"github.com/go-wyvern/x-agent/internal/api"
 	"github.com/go-wyvern/x-agent/internal/session"
 	"github.com/go-wyvern/x-agent/internal/wechat"
 	"github.com/go-wyvern/x-agent/pkg/container"
@@ -53,38 +52,33 @@ func main() {
 
 	containerManager.StartCleanupScheduler(1*time.Hour, 24*time.Hour)
 
-	chatHandler := api.NewChatHandler(sessionManager, containerManager)
-
 	r := gin.Default()
 
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		
+
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
 		}
-		
+
 		c.Next()
 	})
 
-	r.POST("/v1/chat/completions", chatHandler.HandleChatCompletion)
-	r.GET("/v1/sessions/:id", chatHandler.HandleGetSession)
-	r.DELETE("/v1/sessions/:id", chatHandler.HandleDeleteSession)
-
 	wechatConfig := loadWechatConfig()
-	if wechatConfig != nil {
-		wechatHandler, err := wechat.NewHandler(wechatConfig, sessionManager, containerManager)
-		if err != nil {
-			log.Printf("Failed to create wechat handler: %v", err)
-		} else {
-			r.POST("/api/wechat/webhook", wechatHandler.ReceiveWebhook)
-			r.Any("/api/wechat/callback/:botid", wechatHandler.HandleCallback)
-			log.Println("WeChat Work Smart Robot integration enabled")
-		}
+	if wechatConfig == nil {
+		log.Fatalf("WeChat configuration is missing or incomplete")
 	}
+
+	wechatHandler, err := wechat.NewHandler(wechatConfig, sessionManager, containerManager)
+	if err != nil {
+		log.Fatalf("Failed to create wechat handler: %v", err)
+	}
+	r.POST("/api/wechat/callback", wechatHandler.HandleCallback)
+	r.GET("/api/wechat/callback", wechatHandler.HandleCallback)
+	log.Println("WeChat Work Smart Robot integration enabled")
 
 	serverPort := os.Getenv("SERVER_PORT")
 	if serverPort == "" {

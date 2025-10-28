@@ -9,8 +9,9 @@ type StreamData struct {
 	SessionID string
 	UserID    string
 	Question  string
-	Step      int
-	MaxSteps  int
+	Response  string
+	Error     string
+	Finish    bool
 	CreatedAt time.Time
 }
 
