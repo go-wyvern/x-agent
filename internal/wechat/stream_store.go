@@ -52,15 +52,6 @@ func (s *StreamStore) DeleteStreamData(streamID string) {
 	delete(s.streams, streamID)
 }
 
-func (s *StreamStore) SetStreamResponse(streamID, response string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if data, exists := s.streams[streamID]; exists {
-		data.Response = response
-	}
-}
-
 func (s *StreamStore) GetStreamResponse(streamID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
