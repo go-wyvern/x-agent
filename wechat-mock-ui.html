@@ -461,6 +461,16 @@
         </div>
 
         <div class="config-section">
+          <label>Token</label>
+          <input type="text" v-model="token" placeholder="your_token_here">
+        </div>
+
+        <div class="config-section">
+          <label>EncodingAESKey</label>
+          <input type="text" v-model="encodingAESKey" placeholder="your_encoding_aes_key_here">
+        </div>
+
+        <div class="config-section">
           <label>用户 ID (私聊)</label>
           <input type="text" v-model="privateUserId" placeholder="user001">
         </div>
@@ -529,6 +539,8 @@
           callbackUrl: 'http://localhost:8080/api/wechat/callback',
           aibotId: 'AIBOTID',
           corpId: 'wpxxxx',
+          token: '',
+          encodingAESKey: '',
           
           privateUserId: 'user001',
           privateUserName: '张三',
@@ -933,6 +945,12 @@
         
         const savedCorpId = localStorage.getItem('wechat-corpid');
         if (savedCorpId) this.corpId = savedCorpId;
+        
+        const savedToken = localStorage.getItem('wechat-token');
+        if (savedToken) this.token = savedToken;
+        
+        const savedEncodingAESKey = localStorage.getItem('wechat-encodingaeskey');
+        if (savedEncodingAESKey) this.encodingAESKey = savedEncodingAESKey;
       },
       
       watch: {
@@ -941,6 +959,12 @@
         },
         corpId(newValue) {
           localStorage.setItem('wechat-corpid', newValue);
+        },
+        token(newValue) {
+          localStorage.setItem('wechat-token', newValue);
+        },
+        encodingAESKey(newValue) {
+          localStorage.setItem('wechat-encodingaeskey', newValue);
         }
       }
     }).mount('#app');
