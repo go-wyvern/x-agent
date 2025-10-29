@@ -578,6 +578,52 @@
           return result;
         },
         
+        generateNonce() {
+          return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        },
+        
+        generateTimestamp() {
+          return Math.floor(Date.now() / 1000).toString();
+        },
+        
+        encryptMessage(message, receiverId = '') {
+          if (!this.encodingAESKey || !this.token) {
+            throw new Error('Token and EncodingAESKey are required for encryption');
+          }
+          
+          const aesKey = CryptoJS.enc.Base64.parse(this.encodingAESKey + '=');
+          
+          const randomStr = CryptoJS.lib.WordArray.random(16);
+          const messageBytes = CryptoJS.enc.Utf8.parse(message);
+          const messageLength = CryptoJS.lib.WordArray.create([messageBytes.sigBytes]);
+          const receiverBytes = CryptoJS.enc.Utf8.parse(receiverId);
+          
+          const plaintext = randomStr.clone()
+            .concat(messageLength)
+            .concat(messageBytes)
+            .concat(receiverBytes);
+          
+          const iv = CryptoJS.lib.WordArray.create(aesKey.words.slice(0, 4));
+          
+          const encrypted = CryptoJS.AES.encrypt(plaintext, aesKey, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+          });
+          
+          return encrypted.toString();
+        },
+        
+        calculateSignature(timestamp, nonce, encrypt) {
+          if (!this.token) {
+            throw new Error('Token is required for signature calculation');
+          }
+          
+          const arr = [this.token, timestamp, nonce, encrypt].sort();
+          const str = arr.join('');
+          return CryptoJS.SHA1(str).toString();
+        },
+        
         generateStreamId() {
           return `STREAM_${Date.now()}_${this.streamIdCounter++}`;
         },
@@ -705,12 +751,27 @@
               }
             }
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadJSON = JSON.stringify(payload);
+            const encrypt = this.encryptMessage(payloadJSON, '');
+            const timestamp = this.generateTimestamp();
+            const nonce = this.generateNonce();
+            const msgSignature = this.calculateSignature(timestamp, nonce, encrypt);
+            
+            const encryptedPayload = {
+              encrypt: encrypt
+            };
+            
+            const url = new URL(this.callbackUrl);
+            url.searchParams.set('msg_signature', msgSignature);
+            url.searchParams.set('timestamp', timestamp);
+            url.searchParams.set('nonce', nonce);
+            
+            const response = await fetch(url.toString(), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: JSON.stringify(encryptedPayload)
             });
             
             if (response.ok) {
@@ -762,12 +823,27 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadJSON = JSON.stringify(payload);
+            const encrypt = this.encryptMessage(payloadJSON, '');
+            const timestamp = this.generateTimestamp();
+            const nonce = this.generateNonce();
+            const msgSignature = this.calculateSignature(timestamp, nonce, encrypt);
+            
+            const encryptedPayload = {
+              encrypt: encrypt
+            };
+            
+            const url = new URL(this.callbackUrl);
+            url.searchParams.set('msg_signature', msgSignature);
+            url.searchParams.set('timestamp', timestamp);
+            url.searchParams.set('nonce', nonce);
+            
+            const response = await fetch(url.toString(), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: JSON.stringify(encryptedPayload)
             });
             
             if (response.ok) {
@@ -812,12 +888,27 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadJSON = JSON.stringify(payload);
+            const encrypt = this.encryptMessage(payloadJSON, '');
+            const timestamp = this.generateTimestamp();
+            const nonce = this.generateNonce();
+            const msgSignature = this.calculateSignature(timestamp, nonce, encrypt);
+            
+            const encryptedPayload = {
+              encrypt: encrypt
+            };
+            
+            const url = new URL(this.callbackUrl);
+            url.searchParams.set('msg_signature', msgSignature);
+            url.searchParams.set('timestamp', timestamp);
+            url.searchParams.set('nonce', nonce);
+            
+            const response = await fetch(url.toString(), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: JSON.stringify(encryptedPayload)
             });
             
             if (response.ok) {
@@ -885,12 +976,27 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadJSON = JSON.stringify(payload);
+            const encrypt = this.encryptMessage(payloadJSON, '');
+            const timestamp = this.generateTimestamp();
+            const nonce = this.generateNonce();
+            const msgSignature = this.calculateSignature(timestamp, nonce, encrypt);
+            
+            const encryptedPayload = {
+              encrypt: encrypt
+            };
+            
+            const url = new URL(this.callbackUrl);
+            url.searchParams.set('msg_signature', msgSignature);
+            url.searchParams.set('timestamp', timestamp);
+            url.searchParams.set('nonce', nonce);
+            
+            const response = await fetch(url.toString(), {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: JSON.stringify(encryptedPayload)
             });
             
             if (response.ok) {
