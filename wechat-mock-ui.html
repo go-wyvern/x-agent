@@ -215,7 +215,7 @@
     }
 
     .config-panel {
-      width: 350px;
+      width: 400px;
       background: white;
       padding: 20px;
       overflow-y: auto;
@@ -297,38 +297,6 @@
       background: #e0e0e0;
     }
 
-    .mode-selector {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-
-    .mode-button {
-      flex: 1;
-      padding: 8px;
-      background: #f0f0f0;
-      border: 2px solid #ddd;
-      border-radius: 4px;
-      cursor: pointer;
-      text-align: center;
-      font-size: 13px;
-      transition: all 0.2s;
-    }
-
-    .mode-button.active {
-      background: #1976d2;
-      color: white;
-      border-color: #1976d2;
-    }
-
-    .mode-button:hover {
-      background: #e0e0e0;
-    }
-
-    .mode-button.active:hover {
-      background: #1565c0;
-    }
-
     .test-section {
       margin-top: 20px;
       padding-top: 20px;
@@ -344,13 +312,43 @@
     .test-button:hover {
       background: #43a047;
     }
+
+    .message-type-selector {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 10px;
+    }
+
+    .type-button {
+      padding: 5px 10px;
+      background: #f0f0f0;
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .type-button.active {
+      background: #1976d2;
+      color: white;
+      border-color: #1976d2;
+    }
+
+    .type-button:hover {
+      background: #e0e0e0;
+    }
+
+    .type-button.active:hover {
+      background: #1565c0;
+    }
   </style>
 </head>
 <body>
   <div id="app">
     <div class="header">
       <h1>企业微信智能机器人 Mock UI</h1>
-      <p>本地测试企业微信回调 - Vue + TypeScript</p>
+      <p>本地测试企业微信回调 - 新版 API 规格</p>
     </div>
 
     <div class="container">
@@ -369,18 +367,27 @@
           </div>
         </div>
         <div class="input-area">
+          <div class="message-type-selector">
+            <div class="type-button" :class="{active: privateMessageType === 'text'}" @click="privateMessageType = 'text'">
+              文本
+            </div>
+            <div class="type-button" :class="{active: privateMessageType === 'image'}" @click="privateMessageType = 'image'">
+              图片
+            </div>
+            <div class="type-button" :class="{active: privateMessageType === 'mixed'}" @click="privateMessageType = 'mixed'">
+              图文混排
+            </div>
+          </div>
           <div class="input-wrapper">
             <div class="input-group">
               <div class="input-label">发送消息</div>
               <textarea 
                 v-model="privateInput" 
                 @keydown.enter.prevent="sendPrivateMessage"
-                placeholder="输入消息..."></textarea>
+                :placeholder="getPlaceholder(privateMessageType)"></textarea>
               <div class="quick-commands">
-                <span class="quick-command" @click="privateInput = '/help'">/help</span>
-                <span class="quick-command" @click="privateInput = '/new'">/new</span>
-                <span class="quick-command" @click="privateInput = '/status'">/status</span>
-                <span class="quick-command" @click="privateInput = '/reset'">/reset</span>
+                <span class="quick-command" @click="privateInput = '你好'">/你好</span>
+                <span class="quick-command" @click="privateInput = '天气怎么样'">天气怎么样</span>
               </div>
             </div>
             <button @click="sendPrivateMessage" :disabled="!privateInput.trim() || privateSending">
@@ -405,17 +412,27 @@
           </div>
         </div>
         <div class="input-area">
+          <div class="message-type-selector">
+            <div class="type-button" :class="{active: groupMessageType === 'text'}" @click="groupMessageType = 'text'">
+              文本
+            </div>
+            <div class="type-button" :class="{active: groupMessageType === 'image'}" @click="groupMessageType = 'image'">
+              图片
+            </div>
+            <div class="type-button" :class="{active: groupMessageType === 'mixed'}" @click="groupMessageType = 'mixed'">
+              图文混排
+            </div>
+          </div>
           <div class="input-wrapper">
             <div class="input-group">
               <div class="input-label">发送消息（群聊需要 @x-agent）</div>
               <textarea 
                 v-model="groupInput" 
                 @keydown.enter.prevent="sendGroupMessage"
-                placeholder="@x-agent 输入消息..."></textarea>
+                :placeholder="getPlaceholder(groupMessageType, true)"></textarea>
               <div class="quick-commands">
-                <span class="quick-command" @click="groupInput = '@x-agent /help'">@x-agent /help</span>
-                <span class="quick-command" @click="groupInput = '@x-agent /new'">@x-agent /new</span>
                 <span class="quick-command" @click="groupInput = '@x-agent 你好'">@x-agent 你好</span>
+                <span class="quick-command" @click="groupInput = '@x-agent 天气怎么样'">@x-agent 天气</span>
               </div>
             </div>
             <button @click="sendGroupMessage" :disabled="!groupInput.trim() || groupSending">
@@ -428,38 +445,19 @@
       <div class="config-panel">
         <h3>⚙️ 配置</h3>
         
-        <div class="mode-selector">
-          <div class="mode-button" :class="{active: mode === 'webhook'}" @click="mode = 'webhook'">
-            Webhook (旧版)
-          </div>
-          <div class="mode-button" :class="{active: mode === 'callback'}" @click="mode = 'callback'">
-            Callback (加密)
-          </div>
-        </div>
-
-        <div class="config-section" v-if="mode === 'webhook'">
-          <label>Webhook 地址</label>
-          <input type="text" v-model="webhookUrl" placeholder="http://localhost:8080/api/wechat/webhook">
-        </div>
-
-        <div class="config-section" v-if="mode === 'callback'">
+        <div class="config-section">
           <label>Callback 地址</label>
           <input type="text" v-model="callbackUrl" placeholder="http://localhost:8080/api/wechat/callback">
         </div>
 
-        <div class="config-section" v-if="mode === 'callback'">
-          <label>Bot ID</label>
-          <input type="text" v-model="botId" placeholder="bot001">
+        <div class="config-section">
+          <label>AI Bot ID</label>
+          <input type="text" v-model="aibotId" placeholder="AIBOTID">
         </div>
 
-        <div class="config-section" v-if="mode === 'callback'">
-          <label>Token</label>
-          <input type="text" v-model="token" placeholder="your_token_here">
-        </div>
-
-        <div class="config-section" v-if="mode === 'callback'">
-          <label>EncodingAESKey (43位)</label>
-          <input type="text" v-model="encodingAESKey" placeholder="abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG">
+        <div class="config-section">
+          <label>Corp ID</label>
+          <input type="text" v-model="corpId" placeholder="wpxxxx">
         </div>
 
         <div class="config-section">
@@ -492,10 +490,19 @@
           <input type="text" v-model="botName" placeholder="x-agent">
         </div>
 
-        <div class="test-section" v-if="mode === 'callback'">
+        <div class="test-section">
           <h3 style="font-size: 14px; margin-bottom: 10px;">测试功能</h3>
-          <button class="test-button" @click="testUrlVerification" :disabled="testing">
-            {{ testing ? '测试中...' : '测试 URL 验证' }}
+          <button class="test-button" @click="testEnterChatEvent" :disabled="testing">
+            {{ testing ? '测试中...' : '测试会话事件 (enter_chat)' }}
+          </button>
+          <button class="test-button" @click="testTemplateCardEvent('button_interaction')" :disabled="testing">
+            {{ testing ? '测试中...' : '测试按钮交互卡片事件' }}
+          </button>
+          <button class="test-button" @click="testTemplateCardEvent('vote_interaction')" :disabled="testing">
+            {{ testing ? '测试中...' : '测试投票选择卡片事件' }}
+          </button>
+          <button class="test-button" @click="testTemplateCardEvent('multiple_interaction')" :disabled="testing">
+            {{ testing ? '测试中...' : '测试多项选择卡片事件' }}
           </button>
         </div>
 
@@ -519,12 +526,9 @@
     createApp({
       data() {
         return {
-          mode: 'callback',
-          webhookUrl: 'http://localhost:8080/api/wechat/webhook',
           callbackUrl: 'http://localhost:8080/api/wechat/callback',
-          botId: 'bot001',
-          token: '',
-          encodingAESKey: '',
+          aibotId: 'AIBOTID',
+          corpId: 'wpxxxx',
           
           privateUserId: 'user001',
           privateUserName: '张三',
@@ -542,19 +546,42 @@
           privateMessages: [],
           groupMessages: [],
           
+          privateMessageType: 'text',
+          groupMessageType: 'text',
+          
           lastWebhookResponse: null,
-          messageIdCounter: 0
+          messageIdCounter: 0,
+          streamIdCounter: 0,
+          activeStreams: {}
         };
       },
       
       methods: {
         generateMsgId() {
-          return `msg_${Date.now()}_${this.messageIdCounter++}`;
+          const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+          let result = 'CAIQ';
+          for (let i = 0; i < 28; i++) {
+            result += base64Chars.charAt(Math.floor(Math.random() * base64Chars.length));
+          }
+          return result;
+        },
+        
+        generateStreamId() {
+          return `STREAM_${Date.now()}_${this.streamIdCounter++}`;
         },
         
         getCurrentTime() {
           const now = new Date();
           return now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        },
+        
+        getPlaceholder(type, isGroup = false) {
+          const prefix = isGroup ? '@x-agent ' : '';
+          switch(type) {
+            case 'image': return prefix + '图片URL (测试图片消息)';
+            case 'mixed': return prefix + '文本|图片URL (用|分隔)';
+            default: return prefix + '输入消息...';
+          }
         },
         
         addMessage(chatType, type, sender, content) {
@@ -592,26 +619,7 @@
           this.privateInput = '';
           this.privateSending = true;
           
-          if (this.mode === 'webhook') {
-            const webhookPayload = {
-              WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-private-key',
-              ChatId: this.privateUserId,
-              ChatType: 'single',
-              From: {
-                UserId: this.privateUserId,
-                Name: this.privateUserName,
-                Alias: this.privateUserId
-              },
-              MsgId: this.generateMsgId(),
-              MsgType: 'text',
-              Text: {
-                Content: content
-              }
-            };
-            await this.sendWebhookRequest('private', webhookPayload);
-          } else {
-            await this.sendCallbackMessage('private', content);
-          }
+          await this.sendCallbackMessage('private', content, this.privateMessageType);
           
           this.privateSending = false;
         },
@@ -625,35 +633,67 @@
           this.groupInput = '';
           this.groupSending = true;
           
-          if (this.mode === 'webhook') {
-            const webhookPayload = {
-              WebhookUrl: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=mock-group-key',
-              ChatId: this.groupChatId,
-              ChatType: 'group',
-              From: {
-                UserId: this.groupUserId,
-                Name: this.groupUserName,
-                Alias: this.groupUserId
-              },
-              MsgId: this.generateMsgId(),
-              MsgType: 'text',
-              Text: {
-                Content: content
-              }
-            };
-            await this.sendWebhookRequest('group', webhookPayload);
-          } else {
-            await this.sendCallbackMessage('group', content);
-          }
+          await this.sendCallbackMessage('group', content, this.groupMessageType);
           
           this.groupSending = false;
         },
         
-        async sendWebhookRequest(chatType, payload) {
+        async sendCallbackMessage(chatType, content, messageType) {
           try {
-            this.addMessage(chatType, 'system', '', '⏳ 正在发送 Webhook 请求...');
+            this.addMessage(chatType, 'system', '', '⏳ 正在发送消息...');
             
-            const response = await fetch(this.webhookUrl, {
+            const msgid = this.generateMsgId();
+            const createTime = Math.floor(Date.now() / 1000);
+            
+            let payload = {
+              msgid: msgid,
+              create_time: createTime,
+              aibotid: this.aibotId,
+              from: {
+                corpid: this.corpId,
+                userid: chatType === 'private' ? this.privateUserId : this.groupUserId
+              }
+            };
+            
+            if (chatType === 'group') {
+              payload.chatid = this.groupChatId;
+              payload.chattype = 'group';
+            }
+            
+            if (messageType === 'text') {
+              payload.msgtype = 'text';
+              payload.text = {
+                content: content
+              };
+            } else if (messageType === 'image') {
+              payload.msgtype = 'image';
+              payload.image = {
+                url: content || 'https://example.com/test.png'
+              };
+            } else if (messageType === 'mixed') {
+              const parts = content.split('|');
+              payload.msgtype = 'mixed';
+              payload.mixed = {
+                msg_item: [
+                  {
+                    msgtype: 'text',
+                    text: {
+                      content: parts[0] || content
+                    }
+                  }
+                ]
+              };
+              if (parts.length > 1) {
+                payload.mixed.msg_item.push({
+                  msgtype: 'image',
+                  image: {
+                    url: parts[1]
+                  }
+                });
+              }
+            }
+            
+            const response = await fetch(this.callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -661,91 +701,127 @@
               body: JSON.stringify(payload)
             });
             
-            const responseData = await response.json();
-            
             if (response.ok) {
+              const responseData = await response.json();
+              
               this.lastWebhookResponse = {
                 status: 'success',
                 message: `状态码: ${response.status}\n响应: ${JSON.stringify(responseData, null, 2)}`
               };
               
-              this.addMessage(chatType, 'system', '', `✓ Webhook 请求成功 (${response.status})`);
+              this.addMessage(chatType, 'system', '', `✓ 消息发送成功 (${response.status})`);
               
-              if (responseData.text && responseData.text.content) {
+              if (responseData.msgtype === 'stream' && responseData.stream && responseData.stream.id) {
+                const streamId = responseData.stream.id;
+                this.addMessage(chatType, 'system', '', `📡 收到流式消息ID: ${streamId}`);
+                
+                setTimeout(() => this.sendStreamRefresh(chatType, streamId, msgid, 1), 1000);
+              } else if (responseData.msgtype === 'text' && responseData.text) {
                 setTimeout(() => {
                   this.addMessage(chatType, 'bot', this.botName, responseData.text.content);
                 }, 500);
               }
             } else {
-              throw new Error(`HTTP ${response.status}: ${JSON.stringify(responseData)}`);
+              const errorText = await response.text();
+              throw new Error(`HTTP ${response.status}: ${errorText}`);
             }
           } catch (error) {
             this.lastWebhookResponse = {
               status: 'error',
               message: error.message
             };
-            this.addMessage(chatType, 'system', '', `✗ Webhook 请求失败: ${error.message}`);
+            this.addMessage(chatType, 'system', '', `✗ 消息发送失败: ${error.message}`);
           }
         },
         
-        async sendCallbackMessage(chatType, content) {
+        async sendStreamRefresh(chatType, streamId, originalMsgId, count) {
           try {
-            this.addMessage(chatType, 'system', '', '⏳ 正在发送加密消息...');
-            
-            const message = {
-              msgtype: 'text',
-              text: {
-                content: content
+            const payload = {
+              msgid: this.generateMsgId(),
+              aibotid: this.aibotId,
+              chatid: chatType === 'group' ? this.groupChatId : undefined,
+              chattype: chatType === 'group' ? 'group' : undefined,
+              from: {
+                userid: chatType === 'private' ? this.privateUserId : this.groupUserId
+              },
+              msgtype: 'stream',
+              stream: {
+                id: streamId
               }
             };
             
-            const messageJson = JSON.stringify(message);
-            const timestamp = Math.floor(Date.now() / 1000).toString();
-            const nonce = this.generateNonce();
-            
-            const encrypted = this.encryptMsg(messageJson, this.encodingAESKey, '');
-            const msgSignature = this.calculateSignature(this.token, timestamp, nonce, encrypted);
-            
-            const encryptedPayload = {
-              encrypt: encrypted
-            };
-            
-            const url = `${this.callbackUrl}/${this.botId}?msg_signature=${msgSignature}&timestamp=${timestamp}&nonce=${nonce}`;
-            
-            const response = await fetch(url, {
+            const response = await fetch(this.callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(encryptedPayload)
+              body: JSON.stringify(payload)
             });
             
             if (response.ok) {
-              const responseText = await response.text();
+              const responseData = await response.json();
+              
+              if (responseData.msgtype === 'stream' && responseData.stream) {
+                const stream = responseData.stream;
+                
+                if (stream.content) {
+                  this.addMessage(chatType, 'bot', this.botName, 
+                    `${stream.finish ? '✅ ' : '⏳ '}${stream.content}`);
+                }
+                
+                if (!stream.finish && count < 3) {
+                  setTimeout(() => this.sendStreamRefresh(chatType, streamId, originalMsgId, count + 1), 1500);
+                } else if (stream.finish) {
+                  this.addMessage(chatType, 'system', '', `✓ 流式消息完成`);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Stream refresh error:', error);
+          }
+        },
+        
+        async testEnterChatEvent() {
+          this.testing = true;
+          try {
+            this.addMessage('private', 'system', '', '🔔 测试会话事件 (enter_chat)...');
+            
+            const payload = {
+              msgid: this.generateMsgId(),
+              create_time: Math.floor(Date.now() / 1000),
+              aibotid: this.aibotId,
+              from: {
+                corpid: this.corpId,
+                userid: this.privateUserId
+              },
+              msgtype: 'event',
+              event: {
+                eventtype: 'enter_chat'
+              }
+            };
+            
+            const response = await fetch(this.callbackUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+              const responseData = await response.json();
               
               this.lastWebhookResponse = {
                 status: 'success',
-                message: `状态码: ${response.status}\n响应: ${responseText}`
+                message: `会话事件测试成功\n响应: ${JSON.stringify(responseData, null, 2)}`
               };
               
-              this.addMessage(chatType, 'system', '', `✓ 加密消息发送成功 (${response.status})`);
+              this.addMessage('private', 'system', '', `✓ 会话事件测试成功`);
               
-              if (responseText && responseText !== 'success') {
-                try {
-                  const respData = JSON.parse(responseText);
-                  if (respData.encrypt) {
-                    const decrypted = this.decryptMsg(respData.encrypt, respData.msgsignature, respData.timestamp, respData.nonce, this.token, this.encodingAESKey, '');
-                    const decryptedObj = JSON.parse(decrypted);
-                    
-                    if (decryptedObj.msgtype === 'stream' && decryptedObj.stream) {
-                      setTimeout(() => {
-                        this.addMessage(chatType, 'bot', this.botName, decryptedObj.stream.content || '处理中...');
-                      }, 500);
-                    }
-                  }
-                } catch (e) {
-                  console.log('Response is not encrypted or invalid:', e);
-                }
+              if (responseData.msgtype === 'text' && responseData.text) {
+                setTimeout(() => {
+                  this.addMessage('private', 'bot', this.botName, responseData.text.content);
+                }, 500);
               }
             } else {
               throw new Error(`HTTP ${response.status}`);
@@ -755,111 +831,87 @@
               status: 'error',
               message: error.message
             };
-            this.addMessage(chatType, 'system', '', `✗ 加密消息发送失败: ${error.message}`);
+            this.addMessage('private', 'system', '', `✗ 会话事件测试失败: ${error.message}`);
+          } finally {
+            this.testing = false;
           }
         },
         
-        async testUrlVerification() {
-          if (!this.token || !this.encodingAESKey) {
-            alert('请先配置 Token 和 EncodingAESKey');
-            return;
-          }
-          
+        async testTemplateCardEvent(cardType) {
           this.testing = true;
           try {
-            const timestamp = Math.floor(Date.now() / 1000).toString();
-            const nonce = this.generateNonce();
-            const echoStr = this.encryptMsg('test_echo', this.encodingAESKey, '');
-            const msgSignature = this.calculateSignature(this.token, timestamp, nonce, echoStr);
+            this.addMessage('group', 'system', '', `🔔 测试${this.getCardTypeName(cardType)}事件...`);
             
-            const url = `${this.callbackUrl}/${this.botId}?msg_signature=${msgSignature}&timestamp=${timestamp}&nonce=${nonce}&echostr=${encodeURIComponent(echoStr)}`;
+            const payload = {
+              msgid: this.generateMsgId(),
+              create_time: Math.floor(Date.now() / 1000),
+              aibotid: this.aibotId,
+              from: {
+                corpid: this.corpId,
+                userid: this.groupUserId
+              },
+              chatid: this.groupChatId,
+              chattype: 'group',
+              msgtype: 'event',
+              event: {
+                eventtype: 'template_card_event',
+                template_card_event: {
+                  card_type: cardType,
+                  event_key: 'button_test_key',
+                  task_id: 'task_' + Date.now(),
+                  selected_items: {
+                    selected_item: [
+                      {
+                        question_key: 'test_question_key',
+                        option_ids: {
+                          option_id: ['option_1']
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            };
             
-            const response = await fetch(url, {
-              method: 'GET'
+            const response = await fetch(this.callbackUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(payload)
             });
             
-            const responseText = await response.text();
-            
-            if (response.ok && responseText === 'test_echo') {
+            if (response.ok) {
+              const responseData = await response.json();
+              
               this.lastWebhookResponse = {
                 status: 'success',
-                message: `URL 验证成功!\n响应: ${responseText}`
+                message: `${this.getCardTypeName(cardType)}事件测试成功\n响应: ${JSON.stringify(responseData, null, 2)}`
               };
-              alert('✓ URL 验证成功!');
+              
+              this.addMessage('group', 'system', '', `✓ ${this.getCardTypeName(cardType)}事件测试成功`);
             } else {
-              this.lastWebhookResponse = {
-                status: 'error',
-                message: `URL 验证失败\n状态码: ${response.status}\n响应: ${responseText}`
-              };
-              alert('✗ URL 验证失败，请检查配置');
+              throw new Error(`HTTP ${response.status}`);
             }
           } catch (error) {
             this.lastWebhookResponse = {
               status: 'error',
               message: error.message
             };
-            alert('✗ URL 验证失败: ' + error.message);
+            this.addMessage('group', 'system', '', `✗ 模版卡片事件测试失败: ${error.message}`);
           } finally {
             this.testing = false;
           }
         },
         
-        generateNonce() {
-          return Math.random().toString(36).substring(2, 15);
-        },
-        
-        calculateSignature(token, timestamp, nonce, encrypt) {
-          const arr = [token, timestamp, nonce, encrypt].sort();
-          const str = arr.join('');
-          return CryptoJS.SHA1(str).toString();
-        },
-        
-        encryptMsg(text, encodingAESKey, receiveId) {
-          const aesKey = CryptoJS.enc.Base64.parse(encodingAESKey + '=');
-          
-          const randomStr = CryptoJS.lib.WordArray.random(16);
-          const textBytes = CryptoJS.enc.Utf8.parse(text);
-          const textLength = CryptoJS.lib.WordArray.create([textBytes.sigBytes]);
-          const receiveIdBytes = CryptoJS.enc.Utf8.parse(receiveId);
-          
-          const content = randomStr.concat(textLength).concat(textBytes).concat(receiveIdBytes);
-          
-          const iv = CryptoJS.lib.WordArray.create(aesKey.words.slice(0, 4));
-          const encrypted = CryptoJS.AES.encrypt(content, aesKey, {
-            iv: iv,
-            mode: CryptoJS.mode.CBC,
-            padding: CryptoJS.pad.Pkcs7
-          });
-          
-          return encrypted.ciphertext.toString(CryptoJS.enc.Base64);
-        },
-        
-        decryptMsg(encryptedText, msgSignature, timestamp, nonce, token, encodingAESKey, receiveId) {
-          const signature = this.calculateSignature(token, timestamp, nonce, encryptedText);
-          if (signature !== msgSignature) {
-            throw new Error('Signature verification failed');
-          }
-          
-          const aesKey = CryptoJS.enc.Base64.parse(encodingAESKey + '=');
-          const iv = CryptoJS.lib.WordArray.create(aesKey.words.slice(0, 4));
-          
-          const decrypted = CryptoJS.AES.decrypt(encryptedText, aesKey, {
-            iv: iv,
-            mode: CryptoJS.mode.CBC,
-            padding: CryptoJS.pad.Pkcs7
-          });
-          
-          const decryptedWords = decrypted.words;
-          const textLength = (decryptedWords[4] << 24) | (decryptedWords[5] << 16) | (decryptedWords[6] << 8) | decryptedWords[7];
-          
-          const textStart = 20;
-          const textEnd = textStart + textLength;
-          
-          const textBytes = CryptoJS.lib.WordArray.create(
-            decryptedWords.slice(textStart / 4, Math.ceil(textEnd / 4))
-          );
-          
-          return CryptoJS.enc.Utf8.stringify(textBytes).substring(0, textLength);
+        getCardTypeName(cardType) {
+          const names = {
+            'button_interaction': '按钮交互卡片',
+            'vote_interaction': '投票选择卡片',
+            'multiple_interaction': '多项选择卡片',
+            'text_notice': '文本通知卡片'
+          };
+          return names[cardType] || cardType;
         },
         
         clearAllChats() {
@@ -867,33 +919,28 @@
             this.privateMessages = [];
             this.groupMessages = [];
             this.lastWebhookResponse = null;
+            this.activeStreams = {};
           }
         }
       },
       
       mounted() {
         this.addMessage('private', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (私聊模式)');
-        this.addMessage('group', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (群聊模式，需要 @x-agent)');
+        this.addMessage('group', 'system', '', '👋 欢迎使用企业微信智能机器人 Mock UI (群聊模式)');
         
-        const savedMode = localStorage.getItem('wechat-mock-mode');
-        if (savedMode) this.mode = savedMode;
+        const savedAibotId = localStorage.getItem('wechat-aibotid');
+        if (savedAibotId) this.aibotId = savedAibotId;
         
-        const savedToken = localStorage.getItem('wechat-token');
-        if (savedToken) this.token = savedToken;
-        
-        const savedKey = localStorage.getItem('wechat-encoding-aes-key');
-        if (savedKey) this.encodingAESKey = savedKey;
+        const savedCorpId = localStorage.getItem('wechat-corpid');
+        if (savedCorpId) this.corpId = savedCorpId;
       },
       
       watch: {
-        mode(newMode) {
-          localStorage.setItem('wechat-mock-mode', newMode);
+        aibotId(newValue) {
+          localStorage.setItem('wechat-aibotid', newValue);
         },
-        token(newToken) {
-          localStorage.setItem('wechat-token', newToken);
-        },
-        encodingAESKey(newKey) {
-          localStorage.setItem('wechat-encoding-aes-key', newKey);
+        corpId(newValue) {
+          localStorage.setItem('wechat-corpid', newValue);
         }
       }
     }).mount('#app');
