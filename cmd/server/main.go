@@ -26,7 +26,16 @@ func main() {
 
 	store := storage.NewRedisSessionStore(redisHost, 24*time.Hour)
 
-	sessionManager := session.NewSessionManager(store, 24*time.Hour)
+	skillsRepoURL := os.Getenv("SKILLS_REPO_URL")
+	if skillsRepoURL == "" {
+		skillsRepoURL = "https://github.com/go-wyvern/x-skills"
+	}
+	skillsRepoBranch := os.Getenv("SKILLS_REPO_BRANCH")
+	if skillsRepoBranch == "" {
+		skillsRepoBranch = "main"
+	}
+
+	sessionManager := session.NewSessionManager(store, 24*time.Hour, skillsRepoURL, skillsRepoBranch)
 
 	sessionManager.StartCleanupScheduler(1 * time.Hour)
 

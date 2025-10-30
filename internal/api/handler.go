@@ -77,7 +77,12 @@ func (h *ChatHandler) HandleChatCompletion(c *gin.Context) {
 		}
 		c.Header("X-Session-ID", sess.ID)
 
-		_, err = h.containerManager.CreateContainer(sess.ID, "/workspace")
+		workspacePath := sess.WorkspacePath
+		if workspacePath == "" {
+			workspacePath = "/workspace"
+		}
+
+		_, err = h.containerManager.CreateContainer(sess.ID, workspacePath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create container"})
 			return

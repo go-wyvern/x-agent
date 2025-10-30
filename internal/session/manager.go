@@ -10,18 +10,26 @@ import (
 
 	"github.com/go-wyvern/x-agent/internal/models"
 	"github.com/go-wyvern/x-agent/pkg/storage"
+	"github.com/go-wyvern/x-agent/pkg/workspace"
 )
 
 type SessionManager struct {
-	store      storage.SessionStore
-	mutex      sync.RWMutex
-	sessionTTL time.Duration
+	store            storage.SessionStore
+	mutex            sync.RWMutex
+	sessionTTL       time.Duration
+	skillsRepoURL    string
+	skillsRepoBranch string
 }
 
-func NewSessionManager(store storage.SessionStore, ttl time.Duration) *SessionManager {
+func NewSessionManager(store storage.SessionStore, ttl time.Duration, skillsRepoURL, skillsRepoBranch string) *SessionManager {
+	if skillsRepoBranch == "" {
+		skillsRepoBranch = "main"
+	}
 	return &SessionManager{
-		store:      store,
-		sessionTTL: ttl,
+		store:            store,
+		sessionTTL:       ttl,
+		skillsRepoURL:    skillsRepoURL,
+		skillsRepoBranch: skillsRepoBranch,
 	}
 }
 
@@ -31,15 +39,29 @@ func (sm *SessionManager) CreateSession(userID string) (*models.Session, error) 
 
 	sessionID := uuid.New().String()
 
+	workspacePath := ""
+	if sm.skillsRepoURL != "" {
+		var err error
+		workspacePath, err = workspace.InitializeSessionWorkspace(workspace.SessionWorkspaceConfig{
+			SessionID:        sessionID,
+			SkillsRepoURL:    sm.skillsRepoURL,
+			SkillsRepoBranch: sm.skillsRepoBranch,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize workspace: %w", err)
+		}
+	}
+
 	session := &models.Session{
-		ID:        sessionID,
-		UserID:    userID,
-		Messages:  []models.Message{},
-		Metadata:  make(map[string]interface{}),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(sm.sessionTTL),
-		Status:    models.SessionActive,
+		ID:            sessionID,
+		UserID:        userID,
+		WorkspacePath: workspacePath,
+		Messages:      []models.Message{},
+		Metadata:      make(map[string]interface{}),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+		ExpiresAt:     time.Now().Add(sm.sessionTTL),
+		Status:        models.SessionActive,
 	}
 
 	err := sm.store.Save(session)
