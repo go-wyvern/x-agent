@@ -596,6 +596,40 @@
           }
         },
         
+        calculateSignature(timestamp, nonce, encrypt) {
+          if (!this.token) {
+            return '';
+          }
+          
+          const arr = [this.token, timestamp, nonce, encrypt];
+          arr.sort();
+          const str = arr.join('');
+          
+          const hash = CryptoJS.SHA1(str);
+          return hash.toString(CryptoJS.enc.Hex);
+        },
+        
+        generateNonce() {
+          return Math.random().toString(36).substring(2, 15);
+        },
+        
+        buildCallbackUrl(encrypt) {
+          if (!this.token) {
+            return this.callbackUrl;
+          }
+          
+          const timestamp = Math.floor(Date.now() / 1000).toString();
+          const nonce = this.generateNonce();
+          const signature = this.calculateSignature(timestamp, nonce, encrypt);
+          
+          const url = new URL(this.callbackUrl);
+          url.searchParams.set('msg_signature', signature);
+          url.searchParams.set('timestamp', timestamp);
+          url.searchParams.set('nonce', nonce);
+          
+          return url.toString();
+        },
+        
         addMessage(chatType, type, sender, content) {
           const message = {
             id: this.generateMsgId(),
@@ -705,12 +739,15 @@
               }
             }
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadStr = JSON.stringify(payload);
+            const callbackUrl = this.buildCallbackUrl(payloadStr);
+            
+            const response = await fetch(callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: payloadStr
             });
             
             if (response.ok) {
@@ -762,12 +799,15 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadStr = JSON.stringify(payload);
+            const callbackUrl = this.buildCallbackUrl(payloadStr);
+            
+            const response = await fetch(callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: payloadStr
             });
             
             if (response.ok) {
@@ -812,12 +852,15 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadStr = JSON.stringify(payload);
+            const callbackUrl = this.buildCallbackUrl(payloadStr);
+            
+            const response = await fetch(callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: payloadStr
             });
             
             if (response.ok) {
@@ -885,12 +928,15 @@
               }
             };
             
-            const response = await fetch(this.callbackUrl, {
+            const payloadStr = JSON.stringify(payload);
+            const callbackUrl = this.buildCallbackUrl(payloadStr);
+            
+            const response = await fetch(callbackUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(payload)
+              body: payloadStr
             });
             
             if (response.ok) {
