@@ -49,7 +49,7 @@ func (m *mockStore) FindExpired() ([]*models.Session, error) {
 
 func TestCreateSession(t *testing.T) {
 	store := newMockStore()
-	manager := NewSessionManager(store, 24*time.Hour)
+	manager := NewSessionManager(store, 24*time.Hour, "", "")
 
 	session, err := manager.CreateSession("user123")
 	if err != nil {
@@ -71,7 +71,7 @@ func TestCreateSession(t *testing.T) {
 
 func TestGetSession(t *testing.T) {
 	store := newMockStore()
-	manager := NewSessionManager(store, 24*time.Hour)
+	manager := NewSessionManager(store, 24*time.Hour, "", "")
 
 	created, _ := manager.CreateSession("user123")
 
@@ -87,7 +87,7 @@ func TestGetSession(t *testing.T) {
 
 func TestAddMessage(t *testing.T) {
 	store := newMockStore()
-	manager := NewSessionManager(store, 24*time.Hour)
+	manager := NewSessionManager(store, 24*time.Hour, "", "")
 
 	session, _ := manager.CreateSession("user123")
 
@@ -108,7 +108,7 @@ func TestAddMessage(t *testing.T) {
 
 func TestSessionExpiration(t *testing.T) {
 	store := newMockStore()
-	manager := NewSessionManager(store, 1*time.Millisecond)
+	manager := NewSessionManager(store, 1*time.Millisecond, "", "")
 
 	session, _ := manager.CreateSession("user123")
 
@@ -122,7 +122,7 @@ func TestSessionExpiration(t *testing.T) {
 
 func TestDeleteSession(t *testing.T) {
 	store := newMockStore()
-	manager := NewSessionManager(store, 24*time.Hour)
+	manager := NewSessionManager(store, 24*time.Hour, "", "")
 
 	session, _ := manager.CreateSession("user123")
 

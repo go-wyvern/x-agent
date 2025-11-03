@@ -552,7 +552,7 @@ func (h *Handler) processResponseStream(streamID string, sessionID string, respo
 		if n > 0 {
 			chunk := string(buf[:n])
 			fullResponse.WriteString(chunk)
-			
+
 			data := h.streamStore.GetStreamData(streamID)
 			if data != nil {
 				data.Response = fullResponse.String()
